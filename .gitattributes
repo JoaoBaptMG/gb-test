@@ -2,3 +2,4 @@ tools/nlohmann/json.hpp linguist-vendored
 tools/lodepng* linguist-vendored
 modified-remex/* linguist-vendored
 *.z80 linguist-language=Assembly
+*.inc linguist-language=Assembly
