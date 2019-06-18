@@ -36,8 +36,8 @@ Credits
 =======
 All files in this repository, with exception of *nlohmann/json.hpp*, all LodePNG files and the files in the *modified-remex* folder are Copyright (c) 2019 João Baptista de Paula e Silva and are under the MIT license
 
-The autotile generation scripts are a modified version of the original Remex's scripts that can be found [here](https://app.assembla.com/spaces/rpg-maker-to-tiled-suite/subversion/source), and are under the MIT license.
+The autotile generation scripts are a modified version of the original Remex scripts that can be found [here](https://app.assembla.com/spaces/rpg-maker-to-tiled-suite/subversion/source), and are under the MIT license by Rastagong Librato.
 
-Nlohmann's "JSON for Modern C++" library can be found [here](https://github.com/nlohmann/json) and is also under the MIT license.
+Niels Lohmann's "JSON for Modern C++" library can be found [here](https://github.com/nlohmann/json) and is also under the MIT license.
 
 The LodePNG files belong to Lode Vandevenne and can be found [here](https://lodev.org/lodepng/) under the Zlib license.
