@@ -1,0 +1,3 @@
+tools/nlohmann/json.hpp linguist-vendored
+tools/lodepng* linguist-vendored
+modified-remex/* linguist-vendored
