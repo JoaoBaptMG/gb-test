@@ -1,0 +1,8 @@
+rom0
+    org $0000
+    "ROM IRQs"
+    org $0100
+    "ROM Header"
+    org $0150
+    "bank 0 main.z80"
+

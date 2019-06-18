@@ -1,0 +1,70 @@
+;
+; stdlib.z80
+; Utilty functions
+;
+
+section "bank 0 stdlib.z80", rom0
+
+;;
+; Copies BC bytes from HL to DE.
+MemoryCopy::
+    ld a, e
+    add c
+    jr c, .noOverflow
+    dec b
+.noOverflow
+    inc b
+    jr z, .loop2
+    and a
+    ld c, a
+    jr z, .handleLoop
+.loop1
+    ld a, [de]
+    ld [hl+], a
+    inc e
+    jr nz, .loop1
+    inc d
+.handleLoop
+    dec b
+    jr nz, .loop1
+.loop2
+    ld a, [de]
+    ld [hl+], a
+    inc e
+    dec c
+    jr nz, .loop2
+    ret
+
+;;
+; Copy a full screen tilemap to VRAM
+CopyFullScreenVRAM::
+    ld c, 18
+.copyNewRowToVRAM:
+    ld b, 20
+.copyTilemapToVRAM:
+    ld a, [hl+]
+    ld [de], a
+    inc de
+    dec b
+    jr nz, .copyTilemapToVRAM
+    ld a, e
+    add a, 12
+    ld e, a
+    jr nc, .noOverflow
+    inc d
+.noOverflow:
+    dec c
+    jr nz, .copyNewRowToVRAM
+    ret
+
+; Multiply A by DE and put in HL
+HLeqAxDE::
+    ld hl, 0    
+    rept 8
+    add hl, hl
+    rla
+    jr nc, .endMulLoop\@
+    add hl, de
+.endMulLoop\@
+    endr
+    ret

@@ -1,0 +1,10 @@
+.vscode/
+bin/
+obj/
+odata/
+robj/
+data/maps/
+tiled-maps/autotiles/
+tiled-maps/rules.txt
+*.code-workspace
+modified-remex/__pycache__

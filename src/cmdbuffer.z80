@@ -1,0 +1,112 @@
+;
+; cmdbuffer.z80
+; This file contains the routines to interpret the command buffer
+; processing
+;
+
+section "bank 0 cmdbuffer.z80", rom0
+
+ProcessCommandBuffer::
+    ; Read from the command buffer
+    ld [hSavedStackPtr], sp
+    ld sp, wCommandBuffer
+ReadCmdBuffer:
+    ; Load the command parameters
+    pop bc          ; b = fill byte (if applicable), c = word count & flags
+    ld a, c
+    and c           ; Zero size, abort
+    jr z, SkipReadCmdBuffer
+    pop hl          ; Destination address
+
+    ; Check command type
+    bit 7,c         ; bit7: 0 = copy, 1 = fill
+    jr z, PopslideCopy
+    ld a, c
+    rlca                        ; Transform word count into byte count
+    cpl                         ; Now a = 255 - byte count
+    ld c, a                     ; Load popslide address
+    ld a, b
+    ld b, HIGH(PopslideFill)
+    push bc
+    ret                         ; And push into it
+
+PopslideCopy:
+    bit 6, c        ; bit6: 0 = horizontal, 1 = vertical
+    jr nz, PopslideCopyVert
+    res 5, c        ; Cap (actually wrap) the amount of words picked
+    ld a, c
+    add a, a        ; Multiply by 5
+    add a, a
+    add a, c
+    sub a, 161      ; a = 5*c - 161
+    cpl             ; a = ~(5*c - 161), since ~x = -x - 1, a = -5*c + 161 - 1 = 160 - 5*c
+    ld c, a         ; Load popslide address
+    ld b, HIGH(PopslideCopyHorizontal)
+    push bc         ; Load popslide address and push into it
+    ret
+
+PopslideCopyVert:
+    res 6, c     ; Cap (actually wrap) the amount of words picked
+    res 5, c     ; Cap (actually wrap) the amount of words picked
+    ld a, c
+    add a, a        ; Multiply by 5
+    add a, a
+    add a, c
+    sub a, 161      ; a = 5*c - 161
+    cpl             ; a = ~(5*c - 161), since ~x = -x - 1, a = -5*c + 161 - 1 = 160 - 5*c
+    ld c, a         ; Load popslide address
+    ld b, HIGH(PopslideCopyVertical)
+    push bc         ; Load popslide address and push into it
+    ld bc, 32       ; Load 32 into BC so the vertical routine actually works
+    ret
+
+PostPopslideRoutine:
+    jr ReadCmdBuffer
+SkipReadCmdBuffer:
+    ; Restore the stack
+    ld sp, hSavedStackPtr
+    pop hl
+    ld sp, hl
+
+    ; Write 0 to the first byte of the command buffer
+    xor a, a
+    ld [wCommandBuffer], a
+    ret
+
+; Popslide help routines
+section "popslide fill cmdbuffer.z80", rom0, align[8]
+PopslideFill:
+rept 256
+    ld [hl+], a
+endr
+    jp PostPopslideRoutine
+
+section "popslide copy horizontal cmdbuffer.z80", rom0, align[8]
+PopslideCopyHorizontal: ; each of those is 5 bytes
+rept 32
+    pop de
+    ld a, e
+    ld [hl+], a
+    ld a, d
+    ld [hl+], a
+endr
+    jp PostPopslideRoutine
+
+section "popslide copy vertical cmdbuffer.z80", rom0, align[8]
+PopslideCopyVertical: ; each of those is 5 bytes too
+rept 32
+    pop de
+    ld [hl], e
+    add hl, bc
+    ld [hl], d
+    add hl, bc
+endr
+    jp PostPopslideRoutine
+
+; Command buffer, used to buffering graphics writes to VRAM
+section "wram cmdbuffer.z80", wram0, align[8]
+wCommandBuffer:: ds 255
+wCommandBufferLast:: db
+
+section "hram cmdbuffer.z80", hram
+hSavedStackPtr: db

@@ -1,0 +1,83 @@
+;
+; crt0.z80
+; This is one of the most important files in the project
+; It contains the header data of the file
+;
+
+include "gameboy.inc"
+
+; We start with some important header "filling"
+section "ROM IRQs", rom0
+rept 8
+    ret 
+    nop 
+    nop 
+    nop 
+    nop 
+    nop 
+    nop 
+    nop 
+endr
+
+; Then we start the interrupts
+    ; VBlank routine
+    jp IRQ_VBlank
+    nop 
+    nop 
+    nop 
+    nop 
+    nop
+
+    jp IRQ_LCDCStat
+    nop 
+    nop 
+    nop 
+    nop 
+    nop 
+
+    jp IRQ_Timer
+    nop 
+    nop 
+    nop 
+    nop 
+    nop 
+
+    ; Just ignore serial and joypad IRQ, we'll come back to this later
+rept 2
+    reti 
+    nop 
+    nop 
+    nop 
+    nop 
+    nop 
+    nop 
+    nop 
+endr
+
+; Now, the actual header
+section "ROM Header", rom0
+; The BIOS will arrive here after verification, place code to jump somwehere
+    nop 
+    jp Start 
+
+; The Nintendo logo - don't ask me which format this is
+    NINTENDO_LOGO
+
+; The name of the game - and GBC compatibility flag, no need because this is a DMG game
+GameName equs "\"GAMEBOY SWORD\""
+    db GameName
+    ds 16-strlen(GameName)
+
+; Other options
+    db "JB"                     ; Licensee name
+    db $00                      ; Super Game Boy flag
+    db CART_ROM_MBC5_RAM_BAT    ; cart type ($1B = MBC5 + RAM + battery)
+    db $00                      ; ROM size - this will be updated by rgbfix
+    db $01                      ; RAM size ($01 = 2 KB)
+    db $01                      ; Destiny code ($01 = international)
+    db $33                      ; Old licensee code
+    db $00                      ; ROM version number
+    db $00                      ; Checksum - rgbfix will take care of it
+    db $00, $00                 ; Global check sum
+
+;

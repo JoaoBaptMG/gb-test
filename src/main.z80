@@ -1,0 +1,118 @@
+;
+; main.z80
+; The header that contains the "Start" label, where everyting will begin
+;
+
+include "gameboy.inc"
+
+section "bank 0 main.z80", rom0
+
+; Start function
+Start::
+    ; Set second bank to bank 1
+    ld a, 1
+    ld [rROMB0], a
+
+    ; Disable interrupts
+    di
+
+    ; Load stack pointer to top of WRAM
+    ld sp, _RAM+$2000
+
+.waitForVblank:
+    ld a, [rLY]
+    cp a, $90
+    jr nz, .waitForVblank
+
+    ; Turn off LCD
+    xor a
+    ld [rLCDC], a
+
+    ; Clear VRAM
+    xor a                ; the value 0
+    ld hl, _VRAM     ; the start of VRAM address
+    ld bc, $FC00         ; 2^16 - (the number of clears/8)
+
+.clearVramLoop:
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    inc c
+    jr nz, .clearVramLoop
+    inc b
+    jr nz, .clearVramLoop
+
+    ; Clear shadow OAM
+    ld hl, wShadowOAM
+    ld c, 236
+
+.clearOAM:
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    inc c
+    jr nz, .clearOAM
+
+    ; Clear command buffer
+    ld hl, wCommandBuffer
+    ld c, 224
+
+.clearCB:
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    inc c
+    jr nz, .clearCB
+
+    ; Clear all hardware registers
+    ld [hShLCDC], a
+    ld [hShSTAT], a
+    ld [hShSCY], a
+    ld [hShSCX], a
+    ld [hShLYC], a
+    ld [hShBGP], a
+    ld [hShOBP0], a
+    ld [hShOBP1], a
+    ld [hShWY], a
+    ld [hShWX], a
+
+    ; Transfer OAM DMA transfer routine
+    call CopyDMATransferRoutineToHRAM
+
+    ; Reset the vblank flag - IMPORTANT!
+    ld a, 1
+    ld [hVBlankFlag], a
+
+    ; Ask for VBlank interrupt (using previous a = 1)
+    ld [rIE], a
+
+    ; Turn LCD back on
+    ld a, %10000000
+    ld [rLCDC], a
+
+    ; Enable interrupts
+    ei
+
+    ; Jump to the game scene
+    jp GameScene_Init
+
+IRQ_LCDCStat::
+    reti 
+
+IRQ_Timer::
+    reti 

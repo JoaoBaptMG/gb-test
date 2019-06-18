@@ -1,0 +1,12 @@
+;
+; graphics.z80
+; This file contains some core graphics utilities
+;
+
+include "gameboy.inc"
+include "graphics.inc"
+
+; Place to put the shadow OAM
+section "wram-oamshadow graphics.z80", wram0, align[8]
+wShadowOAM:: ds 160
+

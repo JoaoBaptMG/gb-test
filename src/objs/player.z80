@@ -1,0 +1,239 @@
+;
+; player.z80
+; Routines to control the player
+;
+
+include "gameboy.inc"
+include "util/structs.inc"
+
+; Reserve data for the player
+section "wram player.z80", wram0
+; player's X as a 16.8 fixed point
+wPlayerX: ds 3
+; player's Y as a 16.8 fixed point
+wPlayerY: ds 3 
+; player's animation frame
+wPlayerAnimStep: db
+; camera offset X as a 16-bit integer
+wCameraOffsetX:: dw
+; camera offset Y as a 16-bit integer
+wCameraOffsetY:: dw
+
+section "bank 0 player.z80", rom0
+; Load's the player's character on screen
+PlayerLoadData::
+    ; Copy the character's graphics
+    ld hl, vSpriteData
+    ld de, data_sprites_player_png
+    ld bc, data_sprites_player_png_end - data_sprites_player_png
+    jp MemoryCopy
+
+; Init the player's "singleton object"
+PlayerInit::
+    ; Initialize the player
+    SetDataFixed168 wPlayerX, 13*16 + 0, 0
+    SetDataFixed168 wPlayerY, 12*16 + 0, 0
+    SetData8 wPlayerAnimStep, 0
+    ret
+
+; Update the player, pushing the OAM alongside it
+PlayerUpdate::
+    ; Get joypad input
+    ld a, [hJoypadPress]
+    bit PADB_LEFT, a
+    jr nz, .moveLeft
+    bit PADB_RIGHT, a
+    jr nz, .moveRight
+    jr .moveYDirection
+
+.moveLeft:
+    ld a, [wPlayerX+1]
+    sub a, 1
+    ld [wPlayerX+1], a
+    jr nc, .moveYDirection
+    ld a, [wPlayerX+2]
+    dec a
+    ld [wPlayerX+2], a
+    jr .moveYDirection
+
+.moveRight:
+    ld a, [wPlayerX+1]
+    add a, 1
+    ld [wPlayerX+1], a
+    jr nc, .moveYDirection
+    ld a, [wPlayerX+2]
+    inc a
+    ld [wPlayerX+2], a
+    jr .moveYDirection
+
+.moveYDirection:
+    ld a, [hJoypadPress]
+    bit PADB_UP, a
+    jr nz, .moveUp
+    bit PADB_DOWN, a
+    jr nz, .moveDown
+    jr .updateCameraOffset
+
+.moveUp:
+    ld a, [wPlayerY+1]
+    sub a, 1
+    ld [wPlayerY+1], a
+    jr nc, .updateCameraOffset
+    ld a, [wPlayerY+2]
+    dec a
+    ld [wPlayerY+2], a
+    jr .updateCameraOffset
+
+.moveDown:
+    ld a, [wPlayerY+1]
+    add a, 1
+    ld [wPlayerY+1], a
+    jr nc, .updateCameraOffset
+    ld a, [wPlayerY+2]
+    inc a
+    ld [wPlayerY+2], a
+    jr .updateCameraOffset
+
+.updateCameraOffset:
+    ; Update the camera offset
+    ; In the X direction
+    ld a, [wPlayerX+1]
+    ld c, a
+    ld a, [wPlayerX+2]
+    ld b, a
+
+    ; Check if the pos is < 80
+    and a
+    jr nz, .xPositive
+    ld a, c
+    cp a, 80
+    jr nc, .xPositive
+
+    ; Clamp camera offset to 0
+    xor a
+    ld [wCameraOffsetX], a
+    ld [wCameraOffsetX+1], a
+    jr .checkY
+
+.xPositive:
+    ; Check if the pos is > than the maximum possible
+    ld a, [wMaxCameraPositionRight+1]
+    cp a, b
+    jr c, .setXRight        ; jump if hmax < b
+    jr nz, .setXNormal      ; here, hmax >= b, jump if hmax != b
+    ld a, [wMaxCameraPositionRight]
+    cp a, c
+    jr nc, .setXNormal      ; jump if lmax >= c
+
+    ; here, either hmax < b or (hmax = b and lmax < c)
+.setXRight:
+    ; Clamp camera offset to (max position - 80)
+    ld a, [wMaxCameraPositionRight]
+    sub a, 80
+    ld [wCameraOffsetX], a
+    ld a, [wMaxCameraPositionRight+1]
+    jr nc, .noOverflow3
+    dec a
+.noOverflow3:
+    ld [wCameraOffsetX+1], a
+    jr .checkY
+
+.setXNormal:
+    ; Set camera offset to (player X - 80)
+    ld a, c
+    sub a, 80
+    ld [wCameraOffsetX], a
+    ld a, b
+    jr nc, .noOverflow0
+    dec a
+.noOverflow0:
+    ld [wCameraOffsetX+1], a
+
+.checkY:
+    ; In the Y direction
+    ld a, [wPlayerY+1]
+    ld c, a
+    ld a, [wPlayerY+2]
+    ld b, a
+
+    ; Check if the pos is < 64
+    and a
+    jr nz, .yPositive
+    ld a, c
+    cp a, 64
+    jr nc, .yPositive
+
+    ; Clamp camera offset to 0
+    xor a
+    ld [wCameraOffsetY], a
+    ld [wCameraOffsetY+1], a
+    jr .addSprite
+
+.yPositive:
+    ; Check if the pos is > than the maximum possible
+    ld a, [wMaxCameraPositionBottom+1]
+    cp a, b
+    jr c, .setYDown         ; jump if hmax < b
+    jr nz, .setYNormal      ; here, hmax >= b, jump if hmax != b
+    ld a, [wMaxCameraPositionBottom]
+    cp a, c
+    jr nc, .setYNormal      ; jump if lmax >= c
+
+    ; here, either hmax < b or (hmax = b and lmax < c)
+.setYDown:
+    ; Clamp camera offset to (max position - 64)
+    ld a, [wMaxCameraPositionBottom]
+    sub a, 64
+    ld [wCameraOffsetY], a
+    ld a, [wMaxCameraPositionBottom+1]
+    jr nc, .noOverflow4
+    dec a
+.noOverflow4:
+    ld [wCameraOffsetY+1], a
+    jr .addSprite
+
+.setYNormal:
+    ; Set camera offset to (player Y - 64)
+    ld a, c
+    sub a, 64
+    ld [wCameraOffsetY], a
+    ld a, b
+    jr nc, .noOverflow1
+    dec a
+.noOverflow1:
+    ld [wCameraOffsetY+1], a
+
+.addSprite:
+    ; Add Two OAM entries to the shadow OAM
+    ld hl, wShadowOAM
+
+    ; First entry
+    ld a, [wCameraOffsetY]
+    ld d, a
+    ld a, [wPlayerY+1]
+    sub a, d
+    ld b, a
+    ld [hl+], a
+    ld a, [wCameraOffsetX]
+    ld d, a
+    ld a, [wPlayerX+1]
+    sub a, d
+    add a, 4
+    ld c, a
+    ld [hl+], a
+    xor a
+    ld [hl+], a
+    ld [hl+], a
+
+    ; Second entry
+    ld a, b
+    add a, 8
+    ld [hl+], a
+    ld a, c
+    ld [hl+], a
+    ld a, 1
+    ld [hl+], a
+    xor a
+    ld [hl+], a
+
+    ret

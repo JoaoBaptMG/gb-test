@@ -1,0 +1,887 @@
+;
+; scenes/game/map.z80
+; Contains the routines for proper tileset, map loading and map autoscrolling
+;
+
+include "gameboy.inc"
+
+section "bank 0 scenes/game/map.z80", rom0
+
+; Load a tileset into VRAM and set the necessary variables
+; @param hl The address of the tileset's metadata
+; @destroy a, b, c, d, e, h, l
+MapLoadTileset::
+    ; This should happen with interrupts disabled
+    ; Firstly set the bank (all banked operations should start with this)
+    ld a, [hl+]
+    ld [rROMB0], a
+
+    ; Get the parameters required for the memory copy
+    ld a, [hl+] ; low byte of the char data
+    ld e, a
+    ld a, [hl+] ; high byte of the char data
+    ld d, a
+    ld a, [hl+] ; low byte of the size
+    ld c, a
+    ld a, [hl+] ; high byte of the size
+    ld b, a
+
+    ; Save HL, put DE in HL, put real destination in DE
+    push hl
+    ld hl, vBgBank2
+
+    ; Copy memory
+    call MemoryCopy
+
+    ; Restore HL and pick the rest
+    pop hl
+    ld a, [hl+]
+    ld [wTilesetBank], a
+    ld a, [hl+]
+    ld [wTilesetPtrHigh], a
+    ret
+
+;; Init the variables required to provide map autoscrolling
+MapInit::
+    ; Stash the width of the screen to memory
+    ld a, [hl+]
+    ld [wMapWidth], a
+
+    ; Calculate the maximum right position of the screen
+    ; It's 16 * width - 80
+    swap a
+    ld b, a
+    and a, $F0
+    sub a, 80
+    ld [wMaxCameraPositionRight], a
+    ld a, b
+    jr nc, .noOverflow13
+    dec a
+.noOverflow13:
+    and a, $0F
+    ld [wMaxCameraPositionRight+1], a
+
+    ; Stash the height of the screen to memory
+    ld a, [hl+]
+    ld [wMapHeight], a
+
+    ; Calculate the maximum bottom position of the screen
+    ; It's 16 * height - 64
+    swap a
+    ld b, a
+    and a, $F0
+    sub a, 64
+    ld [wMaxCameraPositionBottom], a
+    ld a, b
+    jr nc, .noOverflow14
+    dec a
+.noOverflow14:
+    and a, $0F
+    ld [wMaxCameraPositionBottom+1], a
+
+    ; Stash the coordinates of the level data
+    ld a, [hl+]
+    ld [wMapBank], a
+    ld a, [hl+]
+    ld [wMapAddress], a
+    ld a, [hl+]
+    ld [wMapAddress+1], a
+    ret
+
+ComputeScreenCoords:
+    ld a, [wPrevCameraOffsetY]
+    ld l, a
+    ld h, HIGH(_SCRN0) >> 2 ; Shifted to compensate for the 16-bit doublings
+    add hl, hl ; x32 now
+
+    ; Add horiz offset
+    ld a, [wPrevCameraOffsetX]
+    swap a ; / 16
+    or a, l
+
+    ; The offsets we computed are in 8x8 tiles, but we need them in 16x16 "blocks"
+    ; Double the value again
+    add a, a ; Double low byte
+    ld [wSavedScreenCoords], a
+    ld a, h
+    adc a, a ; Double high byte w/ carry from low byte
+    ld [wSavedScreenCoords+1], a
+    ret
+
+; Do the initial copy of the screen
+MapLoadFirstScreen::
+    ld a, [wCameraOffsetX]
+    and a, $F0
+    ld [wPrevCameraOffsetX], a
+    ld a, [wCameraOffsetX+1]
+    ld [wPrevCameraOffsetX+1], a
+
+    ld a, [wCameraOffsetY]
+    and a, $F0
+    ld [wPrevCameraOffsetY], a
+    ld a, [wCameraOffsetY+1]
+    ld [wPrevCameraOffsetY+1], a
+
+    ; Compute screen coords and map address
+    call ComputeScreenCoords
+
+    ; Load the map's witdh in DE
+    ld a, [wMapWidth]
+    ld e, a
+    ld d, 0
+
+    ; Load (again) the camera offset Y*16 in HL
+    ld hl, wCameraOffsetY
+    ld a, [hl+]
+    ld h, [hl]
+    ld l, a
+    add hl, hl
+    add hl, hl
+    add hl, hl
+    add hl, hl
+
+    ; Transfer HL/256 to A and multiply by DE
+    ; so HL = camera y * map width
+    ld a, h
+    call HLeqAxDE
+
+    ; Put HL in BC
+    ld c, l
+    ld b, h
+
+    ; Load the camera offset X*16 in HL, divide by 256 and add BC to it
+    ld hl, wCameraOffsetX
+    ld a, [hl+]
+    ld h, [hl]
+    ld l, a
+    add hl, hl
+    add hl, hl
+    add hl, hl
+    add hl, hl
+
+    ; Add to the result
+    ld l, h
+    ld h, 0
+    add hl, bc
+
+    ; Load the map address in BC and add to HL
+    ld a, [wMapAddress]
+    ld c, a
+    ld a, [wMapAddress+1]
+    ld b, a
+    add hl, bc
+
+    ; Store the calculated address
+    ld a, l
+    ld [wMapAddrCamera], a
+    ld a, h
+    ld [wMapAddrCamera+1], a
+
+    ; Begin the transfer
+    ld b, 9 ; horizontal strips
+.horStripBegin:
+    ; Restore the map bank
+    ld a, [wMapBank]
+    ld [rROMB0], a
+
+    ; Load 11 tile bytes from the tilemap
+idx set 0
+    rept 11
+    ld a, [hl+]
+    ld [hMapStoredStrip+idx], a
+idx set idx + 1
+    endr
+
+    ; update HL for the next step and save it
+    ld a, l
+    sub a, 11
+    ld l, a
+    jr nc, .noCarry0
+    dec h
+.noCarry0:
+    add hl, de
+    push hl
+    push de
+
+    ; Change for the tileset bank
+    ld a, [wTilesetBank]
+    ld [rROMB0], a
+
+    ; Prepare the parallel map
+    ld a, [wTilesetPtrHigh]
+    ld h, a
+    ld l, 0
+
+    ; Restore the screen's coordinates
+    ld a, [wSavedScreenCoords]
+    ld e, a
+    ld a, [wSavedScreenCoords+1]
+    ld d, a 
+
+    ; Transfer 11 horizontal tiles to the screen
+    ld c, 10
+idx set 0
+    rept 11
+    ld a, [hMapStoredStrip+idx]
+    ld l, a
+    res 7, l
+    ld a, [hl]
+    ld [de], a
+    inc de
+    set 7, l
+    ld a, [hl]
+    ld [de], a
+    inc de
+    ld a, e
+    and a, $1F
+    jr nz, .stripConsistent\@
+    ld a, e
+    sub a, $20
+    ld e, a
+    jr nc, .noCarry\@
+    dec d
+.noCarry\@:
+    ld c, 42
+.stripConsistent\@:
+idx set idx + 1
+    endr
+
+    ; Load DE for the following line
+    ld a, e
+    add a, c
+    ld e, a
+    jr nc, .noOverflow
+    inc d
+.noOverflow:
+    inc h
+
+    ; Transfer 11 more horizontal tiles to the screen
+    ld c, 10
+idx set 0
+    rept 11
+    ld a, [hMapStoredStrip+idx]
+    ld l, a
+    res 7, l
+    ld a, [hl]
+    ld [de], a
+    inc de
+    set 7, l
+    ld a, [hl]
+    ld [de], a
+    inc de
+    ld a, e
+    and a, $1F
+    jr nz, .stripConsistent\@
+    ld a, e
+    sub a, $20
+    ld e, a
+    jr nc, .noCarry\@
+    dec d
+.noCarry\@:
+    ld c, 42
+.stripConsistent\@:
+idx set idx + 1
+    endr
+
+    ; Load DE for the following line
+    ld a, e
+    add a, c
+    ld e, a
+    jr nc, .noOverflow2
+    inc d
+    res 2, d       ; Do not allow the screen to overflow to the other sceen
+.noOverflow2:
+    ; Save the screen's coordinates for the next step
+    ld a, e
+    ld [wSavedScreenCoords], a
+    ld a, d
+    ld [wSavedScreenCoords+1], a
+
+    ; Restore the loaders for the map
+    pop de
+    pop hl
+
+    ; Next strip (or not)
+    dec b
+    jp nz, .horStripBegin
+
+    ; With that, the map is ready
+    ; Store 10 times the map width to utilise it again
+    ld h, d
+    ld l, e         ; hl = 1 * de
+    add hl, hl      ; hl = 2 * de
+    add hl, hl      ; hl = 4 * de
+    add hl, hl      ; hl = 8 * de
+    add hl, de      ; hl = 9 * de
+
+    ld a, l
+    ld [wMapWidthTimes9], a
+    ld a, h
+    ld [wMapWidthTimes9+1], a
+    ret
+
+MapUpdate::
+    ; Update the map
+    ; Compare the camera offset's X with its previous offset
+    ld a, [wPrevCameraOffsetX+1]
+    ld b, a
+    ld a, [wCameraOffsetX+1]
+    cp a, b                         ; HI(wCameraOffsetX) vs HI(wPrevCameraOffsetX)
+    jp c, .populateLeftUpdate       ; jump if a < b
+    jr nz, .populateRightUpdate     ; here, a >= b - jump if a != b (so a > b)
+
+    ld a, [wPrevCameraOffsetX]
+    ld b, a
+    ld a, [wCameraOffsetX]
+    and a, $F0
+    cp a, b                         ; LO(wCameraOffsetX) vs LO(wPrevCameraOffsetX)
+    jp c, .populateLeftUpdate       ; jump if a < b
+    jr nz, .populateRightUpdate     ; here, a >= b - jump if a != b (so a > b)
+
+.afterX:
+    ; Put into the shadow registers the values of the camera offset
+    ld a, [wCameraOffsetX+1]
+    ld [wPrevCameraOffsetX+1], a
+    ld a, [wCameraOffsetX]
+    ld [hShSCX], a
+    and a, $F0
+    ld [wPrevCameraOffsetX], a
+
+    ; Compare the camera offset's Y with its previous offset
+    ld a, [wPrevCameraOffsetY+1]
+    ld b, a
+    ld a, [wCameraOffsetY+1]
+    cp a, b                         ; HI(wCameraOffsetY) vs HI(wPrevCameraOffsetY)
+    jp c, .populateTopUpdate        ; jump if a < b
+    jp nz, .populateBottomUpdate    ; here, a >= b - jump if a != b (so a > b)
+
+    ld a, [wPrevCameraOffsetY]
+    ld b, a
+    ld a, [wCameraOffsetY]
+    and a, $F0
+    cp a, b                         ; LO(wCameraOffsetY) vs LO(wPrevCameraOffsetY)
+    jp c, .populateTopUpdate        ; jump if a < b
+    jp nz, .populateBottomUpdate    ; here, a >= b - jump if a != b (so a > b)
+
+.afterY:
+    ld a, [wCameraOffsetY+1]
+    ld [wPrevCameraOffsetY+1], a
+    ld a, [wCameraOffsetY]
+    ld [hShSCY], a
+    and a, $F0
+    ld [wPrevCameraOffsetY], a
+    ret
+
+.populateRightUpdate:
+    ; Offset the saved VRAM address
+    ld a, [wPrevCameraOffsetX]
+    add a, $B0
+    ld [wPrevCameraOffsetX], a
+    ; Compute the screen coordinates
+    call ComputeScreenCoords
+    ; Remember to unoffset them later
+    ld a, [wPrevCameraOffsetX]
+    sub a, $B0
+    ld [wPrevCameraOffsetX], a
+
+    ; Restore the map bank
+    ld a, [wMapBank]
+    ld [rROMB0], a
+
+    ; Load the map's width
+    ld a, [wMapWidth]
+    ld e, a
+    ld d, 0
+
+    ; Pick the camera map's address
+    ld hl, wMapAddrCamera
+    ld a, [hl+]
+    ld h, [hl]
+    add a, 11
+    ld l, a
+    jr nc, .noOverflow4
+    inc h
+.noOverflow4:
+
+    ; Load 9 tile bytes from the end tilemap
+idx set 0
+    rept 9
+    ld a, [hl]
+    ld [hMapStoredStrip+idx], a
+    ; Add the map's stride
+    add hl, de
+idx set idx + 1
+    endr
+
+    ; Do the horizontal command
+    call ExecuteHorizontalCommand
+
+    ; Update the map pointer
+    ld a, [wMapAddrCamera]
+    inc a
+    ld [wMapAddrCamera], a
+    jp nz, .afterX
+    ld a, [wMapAddrCamera+1]
+    inc a
+    ld [wMapAddrCamera+1], a
+    jp .afterX
+
+.populateLeftUpdate:
+    ; Update all the map pointers
+    ld a, [wMapAddrCamera]
+    dec a
+    ld [wMapAddrCamera], a
+    inc a
+    jr nz, .noOverflow7
+    ld a, [wMapAddrCamera+1]
+    dec a
+    ld [wMapAddrCamera+1], a
+.noOverflow7:
+
+    ; Offset the saved VRAM address
+    ld a, [wPrevCameraOffsetX]
+    sub a, $10
+    ld [wPrevCameraOffsetX], a
+    ; Compute the screen coordinates
+    call ComputeScreenCoords
+    ; Offset the saved VRAM address
+    ld a, [wPrevCameraOffsetX]
+    add a, $10
+    ld [wPrevCameraOffsetX], a
+
+    ; Restore the map bank
+    ld a, [wMapBank]
+    ld [rROMB0], a
+
+    ; Pick the camera map's address
+    ld hl, wMapAddrCamera
+    ld a, [hl+]
+    ld h, [hl]
+    ld l, a
+
+    ; Load the map's width
+    ld a, [wMapWidth]
+    ld e, a
+    ld d, 0
+
+    ; Load 9 tile bytes from the tilemap
+idx set 0
+    rept 9
+    ld a, [hl]
+    ld [hMapStoredStrip+idx], a
+    add hl, de
+idx set idx + 1
+    endr
+
+    call ExecuteHorizontalCommand
+    jp .afterX
+
+.populateBottomUpdate:
+    ; Offset the saved VRAM address
+    ld a, [wPrevCameraOffsetY]
+    add a, $90
+    ld [wPrevCameraOffsetY], a
+    ; Compute the screen coordinates
+    call ComputeScreenCoords
+    ; Remember to unoffset them later
+    ld a, [wPrevCameraOffsetY]
+    sub a, $90
+    ld [wPrevCameraOffsetY], a
+
+    ; Restore the map bank
+    ld a, [wMapBank]
+    ld [rROMB0], a
+
+    ; Pick the camera map's address
+    ld hl, wMapAddrCamera
+    ld a, [hl+]
+    ld h, [hl]
+    ld l, a
+
+    ; Add the 10*width variable to it
+    ld a, [wMapWidthTimes9]
+    add a, l
+    ld l, a
+    ld a, [wMapWidthTimes9+1]
+    adc a, h
+    ld h, a
+
+    ; Load 11 tile bytes from the end tilemap
+idx set 0
+    rept 11
+    ld a, [hl+]
+    ld [hMapStoredStrip+idx], a
+idx set idx + 1
+    endr
+
+    ; Do the vertical command
+    call ExecuteVerticalCommand
+
+    ; Load the map width
+    ld a, [wMapWidth]
+    ld e, a
+    ld d, 0
+
+    ; Update all the map pointers
+    ld hl, wMapAddrCamera
+    ld a, [hl]
+    add a, e
+    ld [hl+], a
+    jp nc, .afterY
+    inc [hl]
+    jp .afterY
+
+.populateTopUpdate:
+    ; Load the map width
+    ld a, [wMapWidth]
+    ld e, a
+
+    ; Update all the map pointers
+    ld hl, wMapAddrCamera
+    ld a, [hl]
+    sub a, e
+    ld [hl+], a
+    jr nc, .noOverflow5
+    dec [hl]
+.noOverflow5:
+
+    ; Offset the saved VRAM address
+    ld a, [wPrevCameraOffsetY]
+    sub a, $10
+    ld [wPrevCameraOffsetY], a
+    ; Compute the screen coordinates
+    call ComputeScreenCoords
+    ; Offset the saved VRAM address
+    ld a, [wPrevCameraOffsetY]
+    add a, $10
+    ld [wPrevCameraOffsetY], a
+
+    ; Restore the map bank
+    ld a, [wMapBank]
+    ld [rROMB0], a
+
+    ; Pick the camera map's address
+    ld hl, wMapAddrCamera
+    ld a, [hl+]
+    ld h, [hl]
+    ld l, a
+
+    ; Load 11 tile bytes from the tilemap
+idx set 0
+    rept 11
+    ld a, [hl+]
+    ld [hMapStoredStrip+idx], a
+idx set idx + 1
+    endr
+
+    call ExecuteVerticalCommand
+    jp .afterY
+
+ExecuteHorizontalCommand:
+    ; Change for the tileset bank
+    ld a, [wTilesetBank]
+    ld [rROMB0], a
+
+    ; Prepare the parallel map
+    ld a, [wTilesetPtrHigh]
+    ld h, a
+    ld l, 0
+
+    ; Get the command buffer's address
+    ld d, HIGH(wCommandBuffer)
+    ld a, [wCommandBufferLast]
+    ld e, a
+
+    ld a, LOW(hMapStoredStrip)
+    ld [hCurStripAddr], a
+
+    ; Check if we need to do two commands instead of one
+    ; Use the stack to satisfy the need of more commands
+    ld a, [wPrevCameraOffsetY]
+    swap a
+    sub a, 8
+    jr nc, .splitHorizontalCommands
+
+    ; Send to saved command
+    xor a
+    ld [hSavedCommand], a
+    ld a, $40 | 9           ; vertical command
+    ld [hCurCommand], a
+    jr .commandBufferChunk
+
+.splitHorizontalCommands:
+    ; Procude both commands
+    inc a
+    set 6, a
+    ld [hSavedCommand], a
+    res 6, a
+    sub a, 10               ; a = cmd - 10
+    cpl                     ; a = (-cmd - 10) - 1 = 9 - cmd
+    set 6, a
+    ld [hCurCommand], a
+    res 6, a
+    add a, LOW(hMapStoredStrip)
+    ld [hSavedStripAddr], a
+
+.commandBufferChunk:
+    ; Load the size & flags to the command - the second byte is ignored
+    ld a, [hCurCommand]
+    ld [de], a
+    inc e
+    inc e
+
+    ; Save the screen coordinates to the command buffer
+    ld a, [wSavedScreenCoords]
+    ld [de], a
+    inc e
+    ld a, [wSavedScreenCoords+1]
+    ld [de], a
+    inc e
+
+    ld a, [hCurStripAddr]
+    ld c, a
+    ld a, [hCurCommand]
+    ld b, a
+    res 6, b
+    ; Put the required amount of tiles in the command
+.cmdBuffer0:
+    ld a, [$ff00+c]
+    ld l, a
+    res 7, l
+    ld a, [hl]
+    ld [de], a
+    inc e
+    inc h
+    ld a, [hl]
+    ld [de], a
+    inc e
+    dec h
+    inc c
+    dec b
+    jr nz, .cmdBuffer0
+
+    ; Put a new command in the command buffer
+    ld a, [hCurCommand]
+    ld [de], a
+    inc e
+    inc e
+
+    ; Save the screen's coordinates
+    ld a, [wSavedScreenCoords]
+    inc a
+    ld [de], a
+    inc e
+    ld a, [wSavedScreenCoords+1]
+    ld [de], a
+    inc e
+
+    ld a, [hCurStripAddr]
+    ld c, a
+    ld a, [hCurCommand]
+    ld b, a
+    res 6, b
+    ; Put the required amount of tiles in the buffer
+.cmdBuffer1:
+    ld a, [$ff00+c]
+    ld l, a
+    set 7, l
+    ld a, [hl]
+    ld [de], a
+    inc e
+    inc h
+    ld a, [hl]
+    ld [de], a
+    inc e
+    dec h
+    inc c
+    dec b
+    jr nz, .cmdBuffer1
+
+    ; Check if there is a saved command (so to address "broken" parts)
+    ld a, [hSavedCommand]
+    and a
+    jr z, .endHorizontalCommand
+    ld [hCurCommand], a
+    ld a, [hSavedStripAddr]
+    ld [hCurStripAddr], a
+    xor a
+    ld [hSavedCommand], a
+    ; If there is a saved command, remember to update the screen cordinates
+    ; accordingly
+    ld a, [wSavedScreenCoords]
+    and a, $1F
+    ld [wSavedScreenCoords], a
+    ld a, HIGH(_SCRN0)
+    ld [wSavedScreenCoords+1], a
+    jr .commandBufferChunk
+
+.endHorizontalCommand:
+    ; Save the command buffer's last pointer
+    xor a
+    ld [de], a
+    ld a, e
+    ld [wCommandBufferLast], a
+    ret
+
+ExecuteVerticalCommand:
+    ; Change for the tileset bank
+    ld a, [wTilesetBank]
+    ld [rROMB0], a
+
+    ; Prepare the parallel map
+    ld a, [wTilesetPtrHigh]
+    ld h, a
+    ld l, 0
+
+    ; Get the command buffer's address
+    ld d, HIGH(wCommandBuffer)
+    ld a, [wCommandBufferLast]
+    ld e, a
+
+    ld a, LOW(hMapStoredStrip)
+    ld [hCurStripAddr], a
+
+    ; Check if we need to do two commands instead of one
+    ; Use the stack to satisfy the need of more commands
+    ld a, [wPrevCameraOffsetX]
+    swap a
+    sub a, 6
+    jr nc, .splitVerticalCommands
+
+    ; Send to saved command
+    xor a
+    ld [hSavedCommand], a
+    ld a, 11
+    ld [hCurCommand], a
+    jr .commandBufferChunk
+
+.splitVerticalCommands:
+    ; Procude both commands
+    inc a
+    ld [hSavedCommand], a
+    sub a, 12               ; a = cmd - 12
+    cpl                     ; a = (-cmd - 12) - 1 = 11 - cmd
+    ld [hCurCommand], a
+    add a, LOW(hMapStoredStrip)
+    ld [hSavedStripAddr], a
+
+.commandBufferChunk:
+    ; Load the size & flags to the command - the second byte is ignored
+    ld a, [hCurCommand]
+    ld [de], a
+    inc e
+    inc e
+
+    ; Save the screen coordinates to the command buffer
+    ld a, [wSavedScreenCoords]
+    ld [de], a
+    inc e
+    ld a, [wSavedScreenCoords+1]
+    ld [de], a
+    inc e
+
+    ld a, [hCurStripAddr]
+    ld c, a
+    ld a, [hCurCommand]
+    ld b, a
+    ; Put the required amount of tiles in the command
+.cmdBuffer0:
+    ld a, [$ff00+c]
+    ld l, a
+    res 7, l
+    ld a, [hl]
+    ld [de], a
+    inc e
+    set 7, l
+    ld a, [hl]
+    ld [de], a
+    inc e
+    inc c
+    dec b
+    jr nz, .cmdBuffer0
+
+    ; Put a new command in the command buffer
+    inc h
+    ld a, [hCurCommand]
+    ld [de], a
+    inc e
+    inc e
+
+    ; Save the screen's coordinates
+    ld a, [wSavedScreenCoords]
+    add a, 32
+    ld [de], a
+    inc e
+    ld a, [wSavedScreenCoords+1]
+    jr nc, .noOverflow10
+    inc a
+.noOverflow10:
+    ld [de], a
+    inc e
+
+    ld a, [hCurStripAddr]
+    ld c, a
+    ld a, [hCurCommand]
+    ld b, a
+    ; Put the required amount of tiles in the buffer
+.cmdBuffer1:
+    ld a, [$ff00+c]
+    ld l, a
+    res 7, l
+    ld a, [hl]
+    ld [de], a
+    inc e
+    set 7, l
+    ld a, [hl]
+    ld [de], a
+    inc e
+    inc c
+    dec b
+    jr nz, .cmdBuffer1
+
+    ; Check if there is a saved command (so to address "broken" parts)
+    ld a, [hSavedCommand]
+    and a
+    jr z, .endVerticalCommand
+    dec h
+    ld [hCurCommand], a
+    ld a, [hSavedStripAddr]
+    ld [hCurStripAddr], a
+    xor a
+    ld [hSavedCommand], a
+    ; If there is a saved command, remember to update the screen cordinates
+    ; accordingly
+    ld a, [wSavedScreenCoords]
+    and a, $E0
+    ld [wSavedScreenCoords], a
+    jr .commandBufferChunk
+
+.endVerticalCommand:
+    ; Save the command buffer's last pointer
+    xor a
+    ld [de], a
+    ld a, e
+    ld [wCommandBufferLast], a
+    ret
+
+section "hram scenes/game/map.z80", hram
+hMapStoredStrip: ds 11
+hSavedCommand: db
+hSavedStripAddr: db
+hCurCommand: db
+hCurStripAddr: db
+
+section "wram scenes/game/map.z80", wram0
+wTilesetBank: db
+wTilesetPtrHigh: db
+wMapWidth:: db
+wMapHeight:: db
+wMapWidthTimes9: dw
+wMapBank: db
+wMapAddress: dw
+wMapAddrCamera: dw
+wSavedScreenCoords: dw
+wPrevCameraOffsetX: dw
+wPrevCameraOffsetY: dw
+wMaxCameraPositionRight:: dw
+wMaxCameraPositionBottom:: dw

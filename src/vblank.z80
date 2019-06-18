@@ -1,0 +1,155 @@
+;
+; vblank.z80
+; This code handles the vblank IRQ and returns gracefully
+;
+
+include "gameboy.inc"
+
+section "bank 0 vblank.z80", rom0
+
+IRQ_VBlankEnd:
+    pop af
+    reti
+
+IRQ_VBlank::
+    ; Begin by stashing all registers into stack
+    push af
+    ; Check if a frame was already finished
+    ld a, [hVBlankFlag]
+    and a
+    jr nz, IRQ_VBlankEnd ; If not, bail off
+    inc a
+    ld [hVBlankFlag], a
+
+    ; Turn backgrounds/sprites off
+    ld a, %10000000
+    ld [rLCDC], a
+
+    ; Process the command buffer
+    call ProcessCommandBuffer
+
+    ; Transfer the shadow register data to their real registers
+    ld a, [hShSTAT]
+    ld [rSTAT], a
+    ld a, [hShSCY]
+    ld [rSCY], a
+    ld a, [hShSCX]
+    ld [rSCX], a
+    ld a, [hShLYC]
+    ld [rLYC], a
+    ld a, [hShWY]
+    ld [rWY], a
+    ld a, [hShWX]
+    ld [rWX], a
+    ld a, [hShBGP]
+    ld [rBGP], a
+    ld a, [hShOBP0]
+    ld [rOBP0], a
+    ld a, [hShOBP1]
+    ld [rOBP1], a
+    ld a, [hShLCDC]
+    ld [rLCDC], a
+
+    ; DMA transfer
+    ld a, HIGH(wShadowOAM)
+    di
+    jp hHRAMDMATransferRoutine
+    ei
+PostDMATransferContinue:
+
+; It's necessary to read the joypad register multiple times
+; for the read bits to settle (a hardware problem)
+ReadMultiple: macro
+    ld a, \1
+    ld [rP1], a
+    rept 8
+        ld a, [rP1]
+    endr
+    or a, $F0
+endm
+
+    ; Read the joypad
+    ReadMultiple %00010000      ; a = 1111Ssba (up)
+    ld c, a                     ; c = 1111Ssba (up)
+    ReadMultiple %00100000      ; a = 1111v^<> (up)
+    swap a                      ; a = v^<>1111 (up)
+    xor a, c                    ; a = v^<>Ssba (down)
+    ld c, a                     ; c = v^<>Ssba (down)
+    ld [hJoypadPress], a        ; store in HRAM
+    ld a, %00110000
+    ld [rP1], a
+
+    ld a, [hJoypadPressPrev]    ; load previous joypad
+    cpl                         ; Invert the buttons
+    and a, c                    ; Newly pressed buttons
+    ld [hJoypadTrigger], a      ; Store it
+
+    ld a, [hJoypadPressPrev]    ; load previous joypad
+    cpl                         ; Invert the buttons
+    or a, c                     ; Newly unpressed buttons
+    cpl
+    ld [hJoypadRelease], a      ; Store it
+
+    ld a, c
+    ld [hJoypadPressPrev], a     ; Store the previous button away
+
+    ; Restore the data to end the ISR
+    pop af
+    pop af ; <- This will pop the return address from WaitForVBlank (so the infinite loop is exited)
+    reti
+
+;;
+; Wait for V-Blank
+WaitForVBlank::
+    xor a, a
+    ld [wCommandBufferLast], a
+    ldh [hVBlankFlag], a
+.lock
+    halt
+    jr .lock
+
+;;
+; Transfer the DMA routine to HRAM
+CopyDMATransferRoutineToHRAM::
+    ld hl, DMATransferRoutine
+    ld c, LOW(hHRAMDMATransferRoutine)
+    ld b, DMATransferRoutineEnd-DMATransferRoutine
+.loop:
+    ld a, [hl+]
+    ld [$FF00+c], a
+    inc c
+    dec b
+    jr nz, .loop
+    ret
+
+DMATransferRoutine:
+    ld [rDMA], a
+    ld a, 40
+.loop:
+    dec a
+    jr nz, .loop
+    jp PostDMATransferContinue
+DMATransferRoutineEnd:
+
+; Data
+section "hram vblank.z80", hram
+; Shadow registers in high-ram, so they can be updated in the middle of a frame
+hShLCDC:: db
+hShSTAT:: db
+hShSCY:: db
+hShSCX:: db
+hShLYC:: db
+hShWY:: db
+hShWX:: db
+hShBGP:: db
+hShOBP0:: db
+hShOBP1:: db
+; Bank number - very important
+hBankNumber:: db
+; Joypad saved data
+hJoypadPressPrev: db
+hJoypadPress:: db
+hJoypadTrigger:: db
+hJoypadRelease:: db
+hHRAMDMATransferRoutine: ds DMATransferRoutineEnd-DMATransferRoutine
+hVBlankFlag:: db

@@ -1,0 +1,74 @@
+;
+; scenes/game/game.z80
+; The header that contains the game scene
+;
+
+include "gameboy.inc"
+
+section "bank 0 scenes/game/game.z80", rom0
+
+GameScene_Init::
+    ; Wait for VBlank
+    call WaitForVBlank
+
+    ; Disable interrupts, turn off LCD
+    di
+    xor a
+    ld [rLCDC], a
+
+    ; Load the player data
+    call PlayerLoadData
+
+    ; Initialize the player
+    call PlayerInit
+
+    ; Load the tileset
+    ld hl, data_tilesets_level1_json
+    call MapLoadTileset
+
+    ; Init the map, setting the begin parameters
+    ld hl, data_maps_level1_json
+    call MapInit
+
+    ; Update the player the first time
+    call PlayerUpdate
+
+    ; Those lines cannot be swapped around, because
+    ; 'MapLoadFirstScreen' depends on 'PlayerUpdate'
+    ; Load the first screen
+    call MapLoadFirstScreen
+
+    ; Update the map the first time
+    call MapUpdate
+
+    ; Prepare for LDC turn on
+    ld a, %11100011
+    ld [hShLCDC], a     ; Turn sprites, backgrounds and window on
+
+    ; Set default palettes
+    ld a, %11100100
+    ld [hShBGP], a
+    ld [hShOBP0], a
+    ld a, %10010000
+    ld [hShOBP1], a
+
+    ; Set window position
+    ld a, 7
+    ld [hShWX], a
+    ld a, 128
+    ld [hShWY], a
+
+    ; Turn LCD on
+    ld a, %10000000
+    ld [rLCDC], a
+    ei
+
+    ; Enable interrupts and begin scene
+GameScene_Loop:
+    call WaitForVBlank
+
+    ; loop scene
+    call PlayerUpdate
+    call MapUpdate
+    jr GameScene_Loop
+
