@@ -26,9 +26,9 @@ MapLoadTileset::
     ld a, [hl+] ; high byte of the size
     ld b, a
 
-    ; Save HL, put DE in HL, put real destination in DE
+    ; Save HL, load source
     push hl
-    ld hl, vBgBank2
+    ld hl, vBgBank1
 
     ; Copy memory
     call MemoryCopy
@@ -39,6 +39,10 @@ MapLoadTileset::
     ld [wTilesetBank], a
     ld a, [hl+]
     ld [wTilesetPtrHigh], a
+    ld a, [hl+]
+    ld [wTilesetFlagsBank], a
+    ld a, [hl+]
+    ld [wTilesetFlagsPtrHigh], a
     ret
 
 ;; Init the variables required to provide map autoscrolling
@@ -88,14 +92,17 @@ MapInit::
     ld [wMapAddress+1], a
     ret
 
+; Compute the screen coords
+; inputs
+;   a: camera-x
+;   l: camera-y
+; outputs
+;   screen coordinates in wSavedScreenCoords
 ComputeScreenCoords:
-    ld a, [wPrevCameraOffsetY]
-    ld l, a
     ld h, HIGH(_SCRN0) >> 2 ; Shifted to compensate for the 16-bit doublings
     add hl, hl ; x32 now
 
     ; Add horiz offset
-    ld a, [wPrevCameraOffsetX]
     swap a ; / 16
     or a, l
 
@@ -123,6 +130,9 @@ MapLoadFirstScreen::
     ld [wPrevCameraOffsetY+1], a
 
     ; Compute screen coords and map address
+    ld a, [wPrevCameraOffsetY]
+    ld l, a
+    ld a, [wPrevCameraOffsetX]
     call ComputeScreenCoords
 
     ; Load the map's witdh in DE
@@ -374,15 +384,12 @@ MapUpdate::
 
 .populateRightUpdate:
     ; Offset the saved VRAM address
+    ld a, [wPrevCameraOffsetY]
+    ld l, a
     ld a, [wPrevCameraOffsetX]
     add a, $B0
-    ld [wPrevCameraOffsetX], a
     ; Compute the screen coordinates
     call ComputeScreenCoords
-    ; Remember to unoffset them later
-    ld a, [wPrevCameraOffsetX]
-    sub a, $B0
-    ld [wPrevCameraOffsetX], a
 
     ; Restore the map bank
     ld a, [wMapBank]
@@ -439,15 +446,12 @@ idx set idx + 1
 .noOverflow7:
 
     ; Offset the saved VRAM address
+    ld a, [wPrevCameraOffsetY]
+    ld l, a
     ld a, [wPrevCameraOffsetX]
     sub a, $10
-    ld [wPrevCameraOffsetX], a
     ; Compute the screen coordinates
     call ComputeScreenCoords
-    ; Offset the saved VRAM address
-    ld a, [wPrevCameraOffsetX]
-    add a, $10
-    ld [wPrevCameraOffsetX], a
 
     ; Restore the map bank
     ld a, [wMapBank]
@@ -480,13 +484,10 @@ idx set idx + 1
     ; Offset the saved VRAM address
     ld a, [wPrevCameraOffsetY]
     add a, $90
-    ld [wPrevCameraOffsetY], a
+    ld l, a
+    ld a, [wPrevCameraOffsetX]
     ; Compute the screen coordinates
     call ComputeScreenCoords
-    ; Remember to unoffset them later
-    ld a, [wPrevCameraOffsetY]
-    sub a, $90
-    ld [wPrevCameraOffsetY], a
 
     ; Restore the map bank
     ld a, [wMapBank]
@@ -548,13 +549,10 @@ idx set idx + 1
     ; Offset the saved VRAM address
     ld a, [wPrevCameraOffsetY]
     sub a, $10
-    ld [wPrevCameraOffsetY], a
+    ld l, a
+    ld a, [wPrevCameraOffsetX]
     ; Compute the screen coordinates
     call ComputeScreenCoords
-    ; Offset the saved VRAM address
-    ld a, [wPrevCameraOffsetY]
-    add a, $10
-    ld [wPrevCameraOffsetY], a
 
     ; Restore the map bank
     ld a, [wMapBank]
@@ -874,6 +872,8 @@ hCurStripAddr: db
 section "wram scenes/game/map.z80", wram0
 wTilesetBank: db
 wTilesetPtrHigh: db
+wTilesetFlagsBank: db
+wTilesetFlagsPtrHigh: db
 wMapWidth:: db
 wMapHeight:: db
 wMapWidthTimes9: dw

@@ -1,4 +1,7 @@
 {
     "autotile0": "autotiles/level1.png",
-    "tileset": "level1.png"
+    "tileset": "level1.png",
+
+    "autotile0_solid": true,
+    "tileset_solid": [ false, false, false, false ]
 }

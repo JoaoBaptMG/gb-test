@@ -75,23 +75,22 @@ endm
     swap a                      ; a = v^<>1111 (up)
     xor a, c                    ; a = v^<>Ssba (down)
     ld c, a                     ; c = v^<>Ssba (down)
-    ld [hJoypadPress], a        ; store in HRAM
     ld a, %00110000
     ld [rP1], a
 
-    ld a, [hJoypadPressPrev]    ; load previous joypad
+    ld a, [hJoypadPress]        ; load previous joypad
     cpl                         ; Invert the buttons
     and a, c                    ; Newly pressed buttons
     ld [hJoypadTrigger], a      ; Store it
 
-    ld a, [hJoypadPressPrev]    ; load previous joypad
+    ld a, [hJoypadPress]        ; load previous joypad
     cpl                         ; Invert the buttons
     or a, c                     ; Newly unpressed buttons
     cpl
     ld [hJoypadRelease], a      ; Store it
 
     ld a, c
-    ld [hJoypadPressPrev], a     ; Store the previous button away
+    ld [hJoypadPress], a        ; Store it in HRAM
 
     ; Restore the data to end the ISR
     pop af
@@ -147,7 +146,6 @@ hShOBP1:: db
 ; Bank number - very important
 hBankNumber:: db
 ; Joypad saved data
-hJoypadPressPrev: db
 hJoypadPress:: db
 hJoypadTrigger:: db
 hJoypadRelease:: db

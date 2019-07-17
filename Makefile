@@ -23,11 +23,14 @@ ROBJ_FILES = $(addprefix robj/, $(RESOURCE_FILES:odata/%.z80=%.o))
 ASM_FLAGS := -i src/
 
 # paths (remember to replace those paths)
-GBEMU := <<insert path here>>
-TILED := <<insert path here>>
+GBEMU := C:/Users/jbapt/Desktop/bgb/bgb64.exe
+TILED := C:/Users/jbapt/source/repos/build-tiled-Desktop_Qt_5_12_3_MSVC2017_64bit-Release/Release/install-root/tiled.exe
 
 # Keep all intermediary files (maps, assembly and such) around
 .SECONDARY:
+
+# Enable second expansion rule
+.SECONDEXPANSION:
 
 # Actual rules
 .PHONY: all clean run
@@ -49,7 +52,7 @@ robj/%.o: odata/%.z80 $(ROBJ_DIRS)
 	@mkdir -p $(@D)
 	rgbasm $(ASM_FLAGS) -o $@ $<
 
-odata/sprites/%.z80: data/sprites/%.png tools/tools.exe
+odata/sprites/%.z80: data/sprites/%.png tools/tools.exe $$(wildcard data/sprites/$$*.png.json)
 	@mkdir -p $(@D)
 	tools/tools.exe sprite-export $< $@
 

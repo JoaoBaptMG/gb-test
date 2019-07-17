@@ -102,7 +102,7 @@ namespace util
                 }
 
                 iterator operator-(std::intmax_t val) const { return *this + (-val); }
-                iterator& operator-=(std::size_t val) { return *this += (-val); }
+                iterator& operator-=(std::intmax_t val) { return *this += (-val); }
 
                 std::intmax_t operator-(const iterator& other) const
                 {
@@ -254,7 +254,8 @@ namespace util
 
         const view make_view(std::size_t x, std::size_t y, std::size_t _width, std::size_t _height) const
         {
-            if (x + _width >= this->_width || y + _height >= this->_height)
+            if (x >= this->_width || y >= this->_height ||
+                x + _width > this->_width || y + _height > this->_height)
                 throw std::out_of_range("Attempt to make a view that spans outside of the bounds of the grid!");
 
             return view(this, x, y, _width, _height);
@@ -262,7 +263,8 @@ namespace util
 
         view make_view(std::size_t x, std::size_t y, std::size_t _width, std::size_t _height)
         {
-            if (x + _width >= this->_width || y + _height >= this->_height)
+            if (x >= this->_width || y >= this->_height ||
+                x + _width > this->_width || y + _height > this->_height)
                 throw std::out_of_range("Attempt to make a view that spans outside of the bounds of the grid!");
 
             return view(this, x, y, _width, _height);

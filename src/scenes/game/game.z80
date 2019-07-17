@@ -42,8 +42,8 @@ GameScene_Init::
     call MapUpdate
 
     ; Prepare for LDC turn on
-    ld a, %11100011
-    ld [hShLCDC], a     ; Turn sprites, backgrounds and window on
+    ld a, %11100111
+    ld [hShLCDC], a     ; Turn sprites, backgrounds and window on, spritex 8x16
 
     ; Set default palettes
     ld a, %11100100

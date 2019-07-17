@@ -12,6 +12,7 @@ struct State
     std::vector<Character> chars;
     std::map<Character, int> charIndices;
     std::vector<std::array<int, 4>> tiles;
+    std::vector<int> flags;
 
     int addCharacter(const Character& character)
     {
@@ -27,13 +28,19 @@ struct State
 
 struct Offset { int x, y; };
 
-int processAutotile(State& state, std::string name);
-int processTileset(State& state, std::string name);
+int processAutotile(State& state, std::string name, bool solid);
+int processTileset(State& state, std::string name, const std::vector<bool>& solid);
 
 inline static nlohmann::json get(const nlohmann::json& j, const std::string& key)
 {
     if (j.contains(key)) return j.at(key);
     return nlohmann::json();
+}
+
+bool isArrayOfBools(const nlohmann::json& arr)
+{
+    return arr.is_array() && std::all_of(arr.begin(), arr.end(),
+        [](const nlohmann::json& k) { return k.is_boolean(); });
 }
 
 int tilemapExport(int argc, char **argv)
@@ -55,14 +62,22 @@ int tilemapExport(int argc, char **argv)
     auto at1 = get(j, "autotile1");
     auto tset = get(j, "tileset");
 
+    bool at0s = j.contains("autotile0_solid") && j.at("autotile0_solid").is_boolean()
+        && j.at("autotile0_solid").get<bool>();
+    bool at1s = j.contains("autotile1_solid") && j.at("autotile1_solid").is_boolean()
+        && j.at("autotile1_solid").get<bool>();
+
+    auto tss = j.contains("tileset_solid") && isArrayOfBools(j.at("tileset_solid").is_array()) ?
+        j.at("tileset_solid").get<std::vector<bool>>() : std::vector<bool>();
+
     State state;
     int emptyid = state.addCharacter(Character());
     state.tiles.push_back({ emptyid, emptyid, emptyid, emptyid });
 
     int r;
-    if (at0.is_string() && (r = processAutotile(state, folder + at0.get<std::string>())) != 0) return r;
-    if (at1.is_string() && (r = processAutotile(state, folder + at1.get<std::string>())) != 0) return r;
-    if (tset.is_string() && (r = processTileset(state, folder + tset.get<std::string>())) != 0) return r;
+    if (at0.is_string() && (r = processAutotile(state, folder + at0.get<std::string>(), at0s)) != 0) return r;
+    if (at1.is_string() && (r = processAutotile(state, folder + at1.get<std::string>(), at1s)) != 0) return r;
+    if (tset.is_string() && (r = processTileset(state, folder + tset.get<std::string>(), tss)) != 0) return r;
 
     // Check validity
     if (state.chars.size() > 256)
@@ -77,7 +92,8 @@ int tilemapExport(int argc, char **argv)
         return -1;
     }
 
-    state.tiles.resize(128);
+    state.tiles.resize(128, { emptyid, emptyid, emptyid, emptyid });
+    state.flags.resize(128, 0);
 
     std::ofstream of(out);
     of << "; " << std::endl;
@@ -88,7 +104,8 @@ int tilemapExport(int argc, char **argv)
     of << inlabel << "::" << std::endl;
     of << "    db BANK(" << inlabel << "_chars), LOW(" << inlabel << "_chars), HIGH(" << inlabel << "_chars)" << std::endl;
     of << "    dw " << (state.chars.size() * CharSize) << std::endl;
-    of << "    db BANK(" << inlabel << "_tiles), HIGH(" << inlabel << "_tiles)" << std::endl << std::endl;
+    of << "    db BANK(" << inlabel << "_tiles), HIGH(" << inlabel << "_tiles)" << std::endl;
+    of << "    db BANK(" << inlabel << "_flags), HIGH(" << inlabel << "_flags)" << std::endl << std::endl;
 
     of << "section \"chars " << out <<  "\", romx" << std::endl;
     of << inlabel << "_chars:" << std::endl;
@@ -103,17 +120,28 @@ int tilemapExport(int argc, char **argv)
         {
             if (i % 16 == 0) of << std::endl << "    db ";
             else of << ", ";
-            of << state.tiles[i][j];
+            of << (state.tiles[i][j] ^ 128);
         }
         of << std::endl;
     }
+    of << std::endl;
+
+    of << "section \"flag data " << out <<  "\", romx, align[8]" << std::endl;
+    of << inlabel << "_flags:";
+    for (int i = 0; i < 128; i++)
+    {
+        if (i % 16 == 0) of << std::endl << "    db ";
+        else of << ", ";
+        of << state.flags[i];
+    }
+    of << std::endl;
 
     return 0;
 }
 
 extern Offset autotileOffsets[47][4];
 
-int processAutotile(State& state, std::string name)
+int processAutotile(State& state, std::string name, bool solid)
 {
     util::grid<Character> chars;
     int error = ConvertPngToCharacters(chars, name);
@@ -136,12 +164,13 @@ int processAutotile(State& state, std::string name)
         for (int i = 0; i < 4; i++)
             charIndices[i] = state.addCharacter(chars.at(at[i].x, at[i].y));
         state.tiles.push_back(std::move(charIndices));
+        state.flags.push_back(solid);
     }
 
     return 0;
 }
 
-int processTileset(State& state, std::string name)
+int processTileset(State& state, std::string name, const std::vector<bool>& solid)
 {
     util::grid<Character> chars;
     int error = ConvertPngToCharacters(chars, name);
@@ -168,6 +197,9 @@ int processTileset(State& state, std::string name)
             charIndices[2] = state.addCharacter(chars.at(2*i+0, 2*j+1));
             charIndices[3] = state.addCharacter(chars.at(2*i+1, 2*j+1));
             state.tiles.push_back(std::move(charIndices));
+
+            if (j*w + i < solid.size()) state.flags.push_back(solid[i]);
+            else state.flags.push_back(false);
         }
 
     return 0;

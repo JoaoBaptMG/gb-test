@@ -26,3 +26,8 @@ SetDataFixed168: macro
     SetData8 \1, \3
     SetData16 (\1)+1, \2
 endm
+
+SetDataFixed88: macro
+    SetData8 \1, \3
+    SetData8 (\1)+1, \2
+endm

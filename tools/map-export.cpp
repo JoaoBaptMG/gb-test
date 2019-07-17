@@ -40,12 +40,12 @@ int mapExport(int argc, char **argv)
     std::vector<int> data;
     int width, height;
     if ((r = getMapData(j, data, width, height))) return r;
-    if (width < 10 || width > 256)
+    if (width < 10 || width > 255)
     {
-        std::cout << "Error parsing map " << in << ": map must be at least 10 tiles and at most 256 tiles wide!" << std::endl;
+        std::cout << "Error parsing map " << in << ": map must be at least 10 tiles and at most 255 tiles wide!" << std::endl;
         return -1;
     }
-    if (height < 8 || height > 256)
+    if (height < 8 || height > 255)
     {
         std::cout << "Error parsing map " << in << ": map must be at least 8 tiles and at most 256 tiles high!" << std::endl;
         return -1;
