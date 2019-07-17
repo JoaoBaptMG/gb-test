@@ -8,3 +8,4 @@ tiled-maps/autotiles/
 tiled-maps/rules.txt
 *.code-workspace
 modified-remex/__pycache__
+tools/tools.exe
