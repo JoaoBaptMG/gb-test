@@ -89,17 +89,18 @@ PlayerUpdate::
     ld [hl+], a
     ld a, [hl]
     adc a, b
-    ld [hl], a
+    ld [hl+], a
 
     ; Special check for addition carry (manual 2-complement)
     ; if speed is positive: carry set = carry
     ; if speed is negative: carry clear = carry
-    rra                 ; Put carry in bit 7
-    xor b               ; Bit 7 = carry XOR sign
-    rla                 ; Carry was inverted if B is negative
-    ld a, [wPlayerX+2]
-    adc a, 0
-    ld [wPlayerX+2], a
+    bit 7, b                ; check if the speed is positive
+    ld a, [hl]              ; load the third value
+    jr z, .xSpdPositive     ; if the speed is negative, "pre-carry" the value
+    dec a
+.xSpdPositive:
+    adc a, 0                ; apply the carry rule
+    ld [hl], a
 
     ; Add the Y-velocity to the Y-position
     ld hl, wPlayerSpdY
@@ -110,14 +111,15 @@ PlayerUpdate::
     ld [hl+], a
     ld a, [hl]
     adc a, b
-    ld [hl], a
+    ld [hl+], a
 
-    rra                 ; Put carry in bit 7
-    xor b               ; Bit 7 = carry XOR sign
-    rla                 ; Carry was inverted if B is negative
-    ld a, [wPlayerX+2]
-    adc a, 0
-    ld [wPlayerX+2], a
+    bit 7, b                ; check if the speed is positive
+    ld a, [hl]              ; load the third value
+    jr z, .ySpdPositive     ; if the speed is negative, "pre-carry" the value
+    dec a
+.ySpdPositive:
+    adc a, 0                ; apply the carry rule
+    ld [hl], a
 
 .updateCameraOffset:
     ; Update the camera offset
