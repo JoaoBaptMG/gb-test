@@ -6,6 +6,7 @@
 include "gameboy.inc"
 include "util/structs.inc"
 
+Gravity equ 20
 BBoxWidth equ 16*256
 BBoxHeight equ 32*256
 
@@ -38,13 +39,8 @@ PlayerLoadData::
 ; Init the player's "singleton object"
 PlayerInit::
     ; Initialize the player
-    SetDataFixed168 wPlayerX, 11*16 + 0, 0
-    SetDataFixed168 wPlayerY, 12*16 + 0, 0
-    SetData8 wPlayerAnimStep, 0
-    ret
-
-; Update the player, pushing the OAM alongside it
-PlayerUpdate::
+    SetDataFixed168 wPlayerX, 3*16 + 0, 0
+    SetDataFixed168 wPlayerY, 28*16 + 0, 0
     ; Zero the speed data
     ld hl, wPlayerSpdX
     xor a
@@ -52,56 +48,96 @@ PlayerUpdate::
     ld [hl+], a
     ld [hl+], a
     ld [hl+], a
+    ld [hl+], a
+    ret
 
-    ; Get the speed modifier
-    ldh a, [hJoypadPress]
-    bit PADB_A, a
-    jr z, .normalSpeed
+; Update the player, pushing the OAM alongside it
+PlayerUpdate::
+    ; Zero the speed
+    ld hl, wPlayerSpdX+1
+    xor a
+    ld [hl-], a
+    ld [hl], a
 
-    ld b, 5
-    ld c, -5
-    jr .getLeftRight
-
-.normalSpeed:
-    ld b, 1
-    ld c, -1
-
-.getLeftRight:
     ; Get joypad input
     ldh a, [hJoypadPress]
     bit PADB_LEFT, a
     jr nz, .moveLeft
     bit PADB_RIGHT, a
-    jr z, .moveYDirection
+    jr z, .checkForJump
 
 .moveRight:
-    ld a, b
-    ld [wPlayerSpdX+1], a
-    jr .moveYDirection
+    xor a
+    ld [hl+], a
+    ld a, 1
+    ld [hl+], a
+    jr .checkForJump
 
 .moveLeft:
-    ld a, c
-    ld [wPlayerSpdX+1], a
+    xor a
+    ld [hl+], a
+    ld a, -1
+    ld [hl+], a
 
-.moveYDirection:
-    ld a, [hJoypadPress]
-    bit PADB_UP, a
-    jr nz, .moveUp
-    bit PADB_DOWN, a
-    jr z, .updatePosition
+.checkForJump:
+    ; Check if the jump is pressed
+    ldh a, [hJoypadTrigger]
+    bit PADB_B, a
+    jr z, .checkForJumpDecay
 
-.moveDown:
-    ld a, b
-    ld [wPlayerSpdY+1], a
-    jr .updatePosition
+    ; If the speed is zero, jump
+    ld hl, wPlayerSpdY
+    ld a, [hl+]
+    and a
+    jr nz, .checkForJumpDecay
+    ld a, [hl]
+    and a
+    jr nz, .checkForJumpDecay
 
-.moveUp:
-    ld a, c
-    ld [wPlayerSpdY+1], a
+    dec hl
+    ld a, 224
+    ld [hl+], a
+    ld a, -4
+    ld [hl], a
+
+.checkForJumpDecay:
+    ; If jump is not released, ignore
+    ldh a, [hJoypadRelease]
+    bit PADB_B, a
+    jr z, .applyGravity
+
+    ; If the speed is negative, check if it is "less" than the decay speed
+    ld hl, wPlayerSpdY+1
+    bit 7, [hl]
+    jr z, .applyGravity
+
+    ld a, [hl-]                 ; High byte of the speed
+    cp a, -2                    ; Compare with the high byte
+    jr c, .decaySpeed
+    jr nz, .applyGravity
+
+    ld a, [hl]                  ; Low byte of the speed
+    cp a, 112
+    jr nc, .applyGravity
+
+.decaySpeed
+    ld a, 112                   ; Set the decay speed
+    ld [hl+], a
+    ld a, -2
+    ld [hl], a
+
+.applyGravity:
+    ; Add the gravity to the speed
+    ld hl, wPlayerSpdY
+    ld a, [hl]
+    add a, Gravity
+    ld [hl+], a
+    jr nc, .updatePosition
+    inc [hl]
 
 .updatePosition:
     ; Add the Y-velocity to the Y-position
-    ld hl, wPlayerSpdY
+    dec hl
     ld a, [hl+]
     ld b, [hl]
     ld hl, wPlayerY
@@ -132,6 +168,12 @@ PlayerUpdate::
     ; If no collision, skip this step
     jr nc, .updateX
 
+    ; Zero the Y speed
+    xor a
+    ld hl, wPlayerSpdY
+    ld [hl+], a
+    ld [hl+], a
+
     ; Clamp the player to a tile boundary
     ld hl, wPlayerY
     xor a
@@ -159,6 +201,12 @@ PlayerUpdate::
 
     ; If no collision, skip this step
     jr nc, .updateX
+
+    ; Zero the Y speed
+    xor a
+    ld hl, wPlayerSpdY
+    ld [hl+], a
+    ld [hl+], a
 
     ; Clamp the player to a tile boundary
     ld hl, wPlayerY

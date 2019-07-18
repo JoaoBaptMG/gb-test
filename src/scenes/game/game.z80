@@ -16,6 +16,35 @@ GameScene_Init::
     xor a
     ld [rLCDC], a
 
+    ; Copy the mosaic
+    ld hl, vBgBank2 + $800 - (data_sprites_mosaic_png_end - data_sprites_mosaic_png)
+    ld de, data_sprites_mosaic_png
+    ld bc, data_sprites_mosaic_png_end - data_sprites_mosaic_png
+    call MemoryCopy
+
+    ; Populate the mosaic
+    ld hl, _SCRN1
+    ld b, 10
+    ld a, 124
+.mosaicLoop:
+    ld [hl+], a
+    inc a
+    ld [hl+], a
+    dec a
+    dec b
+    jr nz, .mosaicLoop
+
+    ld hl, _SCRN1 + 32
+    ld b, 10
+    ld a, 126
+.mosaicLoop2:
+    ld [hl+], a
+    inc a
+    ld [hl+], a
+    dec a
+    dec b
+    jr nz, .mosaicLoop2
+
     ; Load the player data
     call PlayerLoadData
 
