@@ -8,7 +8,7 @@ section "bank 0 cmdbuffer.z80", rom0
 
 ProcessCommandBuffer::
     ; Read from the command buffer
-    ld [hSavedStackPtr], sp
+    ld [wSavedStackPtr], sp
     ld sp, wCommandBuffer
 ReadCmdBuffer:
     ; Load the command parameters
@@ -54,7 +54,7 @@ PostPopslideRoutine:
     jr ReadCmdBuffer
 SkipReadCmdBuffer:
     ; Restore the stack
-    ld sp, hSavedStackPtr
+    ld sp, wSavedStackPtr
     pop hl
     ld sp, hl
 
@@ -97,6 +97,4 @@ endr
 section "wram cmdbuffer.z80", wram0, align[8]
 wCommandBuffer:: ds 255
 wCommandBufferLast:: db
-
-section "hram cmdbuffer.z80", hram
-hSavedStackPtr: dw
+wSavedStackPtr: dw
