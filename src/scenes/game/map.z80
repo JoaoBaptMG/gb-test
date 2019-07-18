@@ -201,7 +201,7 @@ MapLoadFirstScreen::
 idx set 0
     rept 11
     ld a, [hl+]
-    ld [hMapStoredStrip+idx], a
+    ldh [hMapStoredStrip+idx], a
 idx set idx + 1
     endr
 
@@ -235,7 +235,7 @@ idx set idx + 1
     ld c, 10
 idx set 0
     rept 11
-    ld a, [hMapStoredStrip+idx]
+    ldh a, [hMapStoredStrip+idx]
     ld l, a
     res 7, l
     ld a, [hl]
@@ -272,7 +272,7 @@ idx set idx + 1
     ld c, 10
 idx set 0
     rept 11
-    ld a, [hMapStoredStrip+idx]
+    ldh a, [hMapStoredStrip+idx]
     ld l, a
     res 7, l
     ld a, [hl]
@@ -356,7 +356,7 @@ MapUpdate::
     ld a, [wCameraOffsetX+1]
     ld [wPrevCameraOffsetX+1], a
     ld a, [wCameraOffsetX]
-    ld [hShSCX], a
+    ldh [hShSCX], a
     and a, $F0
     ld [wPrevCameraOffsetX], a
 
@@ -380,7 +380,7 @@ MapUpdate::
     ld a, [wCameraOffsetY+1]
     ld [wPrevCameraOffsetY+1], a
     ld a, [wCameraOffsetY]
-    ld [hShSCY], a
+    ldh [hShSCY], a
     and a, $F0
     ld [wPrevCameraOffsetY], a
     ret
@@ -417,7 +417,7 @@ MapUpdate::
 idx set 0
     rept 9
     ld a, [hl]
-    ld [hMapStoredStrip+idx], a
+    ldh [hMapStoredStrip+idx], a
     ; Add the map's stride
     add hl, de
 idx set idx + 1
@@ -475,7 +475,7 @@ idx set idx + 1
 idx set 0
     rept 9
     ld a, [hl]
-    ld [hMapStoredStrip+idx], a
+    ldh [hMapStoredStrip+idx], a
     add hl, de
 idx set idx + 1
     endr
@@ -514,7 +514,7 @@ idx set idx + 1
 idx set 0
     rept 11
     ld a, [hl+]
-    ld [hMapStoredStrip+idx], a
+    ldh [hMapStoredStrip+idx], a
 idx set idx + 1
     endr
 
@@ -571,7 +571,7 @@ idx set idx + 1
 idx set 0
     rept 11
     ld a, [hl+]
-    ld [hMapStoredStrip+idx], a
+    ldh [hMapStoredStrip+idx], a
 idx set idx + 1
     endr
 
@@ -594,7 +594,7 @@ ExecuteHorizontalCommand:
     ld e, a
 
     ld a, LOW(hMapStoredStrip)
-    ld [hCurStripAddr], a
+    ldh [hCurStripAddr], a
 
     ; Check if we need to do two commands instead of one
     ; Use the stack to satisfy the need of more commands
@@ -605,28 +605,28 @@ ExecuteHorizontalCommand:
 
     ; Send to saved command
     xor a
-    ld [hSavedCommand], a
+    ldh [hSavedCommand], a
     ld a, $40 | 9           ; vertical command
-    ld [hCurCommand], a
+    ldh [hCurCommand], a
     jr .commandBufferChunk
 
 .splitHorizontalCommands:
     ; Procude both commands
     inc a
     set 6, a
-    ld [hSavedCommand], a
+    ldh [hSavedCommand], a
     res 6, a
     sub a, 10               ; a = cmd - 10
     cpl                     ; a = (-cmd - 10) - 1 = 9 - cmd
     set 6, a
-    ld [hCurCommand], a
+    ldh [hCurCommand], a
     res 6, a
     add a, LOW(hMapStoredStrip)
-    ld [hSavedStripAddr], a
+    ldh [hSavedStripAddr], a
 
 .commandBufferChunk:
     ; Load the size & flags to the command - the second byte is ignored
-    ld a, [hCurCommand]
+    ldh a, [hCurCommand]
     ld [de], a
     inc e
     inc e
@@ -639,14 +639,14 @@ ExecuteHorizontalCommand:
     ld [de], a
     inc e
 
-    ld a, [hCurStripAddr]
+    ldh a, [hCurStripAddr]
     ld c, a
-    ld a, [hCurCommand]
+    ldh a, [hCurCommand]
     ld b, a
     res 6, b
     ; Put the required amount of tiles in the command
 .cmdBuffer0:
-    ld a, [$ff00+c]
+    ldh a, [$ff00+c]
     ld l, a
     res 7, l
     ld a, [hl]
@@ -662,7 +662,7 @@ ExecuteHorizontalCommand:
     jr nz, .cmdBuffer0
 
     ; Put a new command in the command buffer
-    ld a, [hCurCommand]
+    ldh a, [hCurCommand]
     ld [de], a
     inc e
     inc e
@@ -676,14 +676,14 @@ ExecuteHorizontalCommand:
     ld [de], a
     inc e
 
-    ld a, [hCurStripAddr]
+    ldh a, [hCurStripAddr]
     ld c, a
-    ld a, [hCurCommand]
+    ldh a, [hCurCommand]
     ld b, a
     res 6, b
     ; Put the required amount of tiles in the buffer
 .cmdBuffer1:
-    ld a, [$ff00+c]
+    ldh a, [$ff00+c]
     ld l, a
     set 7, l
     ld a, [hl]
@@ -699,14 +699,14 @@ ExecuteHorizontalCommand:
     jr nz, .cmdBuffer1
 
     ; Check if there is a saved command (so to address "broken" parts)
-    ld a, [hSavedCommand]
+    ldh a, [hSavedCommand]
     and a
     jr z, .endHorizontalCommand
-    ld [hCurCommand], a
-    ld a, [hSavedStripAddr]
-    ld [hCurStripAddr], a
+    ldh [hCurCommand], a
+    ldh a, [hSavedStripAddr]
+    ldh [hCurStripAddr], a
     xor a
-    ld [hSavedCommand], a
+    ldh [hSavedCommand], a
     ; If there is a saved command, remember to update the screen cordinates
     ; accordingly
     ld a, [wSavedScreenCoords]
@@ -740,7 +740,7 @@ ExecuteVerticalCommand:
     ld e, a
 
     ld a, LOW(hMapStoredStrip)
-    ld [hCurStripAddr], a
+    ldh [hCurStripAddr], a
 
     ; Check if we need to do two commands instead of one
     ; Use the stack to satisfy the need of more commands
@@ -751,24 +751,24 @@ ExecuteVerticalCommand:
 
     ; Send to saved command
     xor a
-    ld [hSavedCommand], a
+    ldh [hSavedCommand], a
     ld a, 11
-    ld [hCurCommand], a
+    ldh [hCurCommand], a
     jr .commandBufferChunk
 
 .splitVerticalCommands:
     ; Procude both commands
     inc a
-    ld [hSavedCommand], a
+    ldh [hSavedCommand], a
     sub a, 12               ; a = cmd - 12
     cpl                     ; a = (-cmd - 12) - 1 = 11 - cmd
-    ld [hCurCommand], a
+    ldh [hCurCommand], a
     add a, LOW(hMapStoredStrip)
-    ld [hSavedStripAddr], a
+    ldh [hSavedStripAddr], a
 
 .commandBufferChunk:
     ; Load the size & flags to the command - the second byte is ignored
-    ld a, [hCurCommand]
+    ldh a, [hCurCommand]
     ld [de], a
     inc e
     inc e
@@ -781,13 +781,13 @@ ExecuteVerticalCommand:
     ld [de], a
     inc e
 
-    ld a, [hCurStripAddr]
+    ldh a, [hCurStripAddr]
     ld c, a
-    ld a, [hCurCommand]
+    ldh a, [hCurCommand]
     ld b, a
     ; Put the required amount of tiles in the command
 .cmdBuffer0:
-    ld a, [$ff00+c]
+    ldh a, [$ff00+c]
     ld l, a
     res 7, l
     ld a, [hl]
@@ -803,7 +803,7 @@ ExecuteVerticalCommand:
 
     ; Put a new command in the command buffer
     inc h
-    ld a, [hCurCommand]
+    ldh a, [hCurCommand]
     ld [de], a
     inc e
     inc e
@@ -820,13 +820,13 @@ ExecuteVerticalCommand:
     ld [de], a
     inc e
 
-    ld a, [hCurStripAddr]
+    ldh a, [hCurStripAddr]
     ld c, a
-    ld a, [hCurCommand]
+    ldh a, [hCurCommand]
     ld b, a
     ; Put the required amount of tiles in the buffer
 .cmdBuffer1:
-    ld a, [$ff00+c]
+    ldh a, [$ff00+c]
     ld l, a
     res 7, l
     ld a, [hl]
@@ -841,15 +841,15 @@ ExecuteVerticalCommand:
     jr nz, .cmdBuffer1
 
     ; Check if there is a saved command (so to address "broken" parts)
-    ld a, [hSavedCommand]
+    ldh a, [hSavedCommand]
     and a
     jr z, .endVerticalCommand
     dec h
-    ld [hCurCommand], a
-    ld a, [hSavedStripAddr]
-    ld [hCurStripAddr], a
+    ldh [hCurCommand], a
+    ldh a, [hSavedStripAddr]
+    ldh [hCurStripAddr], a
     xor a
-    ld [hSavedCommand], a
+    ldh [hSavedCommand], a
     ; If there is a saved command, remember to update the screen cordinates
     ; accordingly
     ld a, [wSavedScreenCoords]

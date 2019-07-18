@@ -15,35 +15,35 @@ IRQ_VBlank::
     ; Begin by stashing all registers into stack
     push af
     ; Check if a frame was already finished
-    ld a, [hVBlankFlag]
+    ldh a, [hVBlankFlag]
     and a
     jr nz, IRQ_VBlankEnd ; If not, bail off
     inc a
-    ld [hVBlankFlag], a
+    ldh [hVBlankFlag], a
 
     ; Process the command buffer
     call ProcessCommandBuffer
 
     ; Transfer the shadow register data to their real registers
-    ld a, [hShSTAT]
+    ldh a, [hShSTAT]
     ld [rSTAT], a
-    ld a, [hShSCY]
+    ldh a, [hShSCY]
     ld [rSCY], a
-    ld a, [hShSCX]
+    ldh a, [hShSCX]
     ld [rSCX], a
-    ld a, [hShLYC]
+    ldh a, [hShLYC]
     ld [rLYC], a
-    ld a, [hShWY]
+    ldh a, [hShWY]
     ld [rWY], a
-    ld a, [hShWX]
+    ldh a, [hShWX]
     ld [rWX], a
-    ld a, [hShBGP]
+    ldh a, [hShBGP]
     ld [rBGP], a
-    ld a, [hShOBP0]
+    ldh a, [hShOBP0]
     ld [rOBP0], a
-    ld a, [hShOBP1]
+    ldh a, [hShOBP1]
     ld [rOBP1], a
-    ld a, [hShLCDC]
+    ldh a, [hShLCDC]
     ld [rLCDC], a
 
     ; DMA transfer
@@ -71,19 +71,19 @@ endm
     ld a, %00110000
     ld [rP1], a
 
-    ld a, [hJoypadPress]        ; load previous joypad
+    ldh a, [hJoypadPress]        ; load previous joypad
     cpl                         ; Invert the buttons
     and a, c                    ; Newly pressed buttons
-    ld [hJoypadTrigger], a      ; Store it
+    ldh [hJoypadTrigger], a      ; Store it
 
-    ld a, [hJoypadPress]        ; load previous joypad
+    ldh a, [hJoypadPress]        ; load previous joypad
     cpl                         ; Invert the buttons
     or a, c                     ; Newly unpressed buttons
     cpl
-    ld [hJoypadRelease], a      ; Store it
+    ldh [hJoypadRelease], a      ; Store it
 
     ld a, c
-    ld [hJoypadPress], a        ; Store it in HRAM
+    ldh [hJoypadPress], a        ; Store it in HRAM
 
     ; Restore the data to end the ISR
     pop af
@@ -107,7 +107,7 @@ CopyDMATransferRoutineToHRAM::
     ld bc, (DMATransferRoutineEnd-DMATransferRoutine) << 8 | LOW(hHRAMDMATransferRoutine)
 .loop:
     ld a, [hl+]
-    ld [$FF00+c], a
+    ldh [$FF00+c], a
     inc c
     dec b
     jr nz, .loop
