@@ -154,7 +154,7 @@ PlayerUpdate::
     ; Check for vertical collision
     ld hl, wPlayerX
     ld bc, BBoxWidth - 1                ; the width of the bbox minus $0.01
-    ld de, BBoxHeight                   ; we want to check the bottom row
+    ld de, BBoxHeight - 1               ; we want to check the bottom row
     call CheckHorizontalLineCollision
 
     ; If no collision, skip this step
@@ -192,8 +192,8 @@ PlayerUpdate::
 
     ; Check for vertical collision
     ld hl, wPlayerX
-    ld bc, BBoxHeight - 1                ; the height of the bbox minus $0.01
-    ld de, 0                             ; zero, since the speed is negative
+    ld bc, 0                             ; zero, since the speed is negative
+    ld de, BBoxHeight - 1                ; the height of the bbox minus $0.01
     call CheckVerticalLineCollision
 
     ; If no collision, skip this step
@@ -220,8 +220,8 @@ PlayerUpdate::
 
     ; Check for vertical collision
     ld hl, wPlayerX
-    ld bc, BBoxHeight - 1               ; the height of the bbox minus $0.01
-    ld de, BBoxWidth                    ; we want to check the bottom row
+    ld bc, BBoxWidth - 1                ; we want to check the bottom row
+    ld de, BBoxHeight - 1               ; the height of the bbox minus $0.01
     call CheckVerticalLineCollision
 
     ; If no collision, skip this step

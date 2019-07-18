@@ -101,73 +101,73 @@ CheckHorizontalLineCollision::
 ; input:
 ;    hl: a pointer to a structure containing
 ;       - 16.8 X and Y positions (already added to speed)
-;    bc: the height of the line in 8.8 fixed point format (- $0.01)
-;    de: a value to add to the X position before getting the tile index
+;    de: the height of the line in 8.8 fixed point format (- $0.01)
+;    bc: a value to add to the X position before getting the tile index
 ; output:
 ;    hl, bc, de will be scrapped
 ;    the result of the collision will be stored in the carry bit
 CheckVerticalLineCollision::
     ; Add the position to the width for the second position
     ld a, [hl+]
-    add a, e        ; We don't need the subpixel calculation here, we just want the carry
+    add a, c        ; We don't need the subpixel calculation here, we just want the carry
     ld a, [hl+]     ; Add the pixels here, taking care of the parameters
-    adc a, d        ; Add the integer part of the width, along with the carry of the subpixel calculation
-    ld d, a         ; d = low of (posX + offset)
+    adc a, b        ; Add the integer part of the width, along with the carry of the subpixel calculation
+    ld b, a         ; b = low of (posX + offset)
     adc a, [hl]     ; a = low of (posX + offset) + high of posX (+ carry of offset)
-    sub a, d        ; a = high of (posX + offset), since the last carry will be based on low of (posX + offset)
-    xor a, d        ; a = high of (posX + offset) ^ low of (posX + offset)
+    sub a, b        ; a = high of (posX + offset), since the last carry will be based on low of (posX + offset)
+    xor a, b        ; a = high of (posX + offset) ^ low of (posX + offset)
     and a, $0f      ; upper 4 bits = 0, lower 4 bits = high of (posX + offset) ^ low of (posX + offset)
-    xor a, d        ; Now, upper 4 bits = low of (posX + offset), lower 4 bits = high of (posX + offset)
+    xor a, b        ; Now, upper 4 bits = low of (posX + offset), lower 4 bits = high of (posX + offset)
     swap a          ; a is the tile position in place
-    ld e, a         ; e = tileX
+    ld c, a         ; c = tileX
     inc hl          ; so we point to the Y position
 
     ; Calculate the Y position
     ld a, [hl+]
-    add a, c        ; We don't need the subpixel calculation here, we just want the carry
+    add a, e        ; We don't need the subpixel calculation here, we just want the carry
     ld a, [hl+]     ; Add the pixels here, taking care of the parameters
-    ld c, a         ; c = low of posY
-    adc a, b        ; Add the integer part of the width, along with the carry of the subpixel calculation
-    ld b, a         ; b = low of (posY + height)
-    ld d, [hl]      ; d = high of posY
-    adc a, d        ; a = low of (posY + height) + high of posY (+ carry of height)
-    sub a, b        ; a = high of (posY + height), since the last carry will be based on low of (posY + offset)
-    xor a, b        ; a = high of (posY + height) ^ low of (posY + height)
+    ld e, a         ; e = low of posY
+    adc a, d        ; Add the integer part of the width, along with the carry of the subpixel calculation
+    ld d, a         ; d = low of (posY + height)
+    ld b, [hl]      ; b = high of posY
+    adc a, b        ; a = low of (posY + height) + high of posY (+ carry of height)
+    sub a, d        ; a = high of (posY + height), since the last carry will be based on low of (posY + offset)
+    xor a, d        ; a = high of (posY + height) ^ low of (posY + height)
     and a, $0f      ; upper 4 bits = 0, lower 4 bits = high of (posY + height) ^ low of (posY + height)
-    xor a, b        ; Now, upper 4 bits = low of (posY + height), lower 4 bits = high of (posY + height)
+    xor a, d        ; Now, upper 4 bits = low of (posY + height), lower 4 bits = high of (posY + height)
     swap a          ; a is the tile position in place
-    ld b, a         ; b = lastTileY
+    ld d, a         ; d = lastTileY
 
-    ld a, d         ; a = high of posY
-    xor a, c        ; a = high of posY ^ low of posY
+    ld a, b         ; a = high of posY
+    xor a, e        ; a = high of posY ^ low of posY
     and a, $0f      ; The same technique here
-    xor a, c        ;
+    xor a, e        ;
     swap a          ; a is the first tile position in place
-    ld c, a         ; c = firstTileY
+    ld e, a         ; e = firstTileY
 
     ; Calculate the number of runs
-    ld a, b         ; a = lastTileY
-    sub a, c        ; a = lastTileY - firstTileY
+    ld a, d         ; a = lastTileY
+    sub a, e        ; a = lastTileY - firstTileY
     inc a           ; a = lastTileY - firstTileY + 1
-    ld d, a         ; d = lastTileY - firstTileY + 1
+    ld b, a         ; b = lastTileY - firstTileY + 1
 
     ; With the positions done, now we need to compute the addresses
-    ld b, 0
+    ld d, 0
     ld a, [wMapWidth]
-    call HLeqAxBC       ; hl = firstTileY * width
-    ld c, e             ; c = tileX
-    add hl, bc          ; hl = tileY * width + tileX
+    call HLeqAxDE       ; hl = firstTileY * width
+    ld e, c             ; e = tileX
+    add hl, de          ; hl = tileY * width + tileX
 
     ; load the map address
     ld a, [wMapAddress]
-    ld c, a
+    ld e, a
     ld a, [wMapAddress+1]
-    ld b, a
-    add hl, bc          ; hl = wMapAddress + tileY * width + tileX
+    ld d, a
+    add hl, de          ; hl = wMapAddress + tileY * width + tileX
 
     ; Now, we iterate for each X and each Y to find if some tile checks
     ; Load the base address already
-    ld b, HIGH(wTilesetFlags)
+    ld d, HIGH(wTilesetFlags)
 
     ; Change bank
     ld a, [wMapBank]
@@ -175,14 +175,14 @@ CheckVerticalLineCollision::
 
 .loop:
     ; Load the tile present there
-    ld c, [hl]
+    ld e, [hl]
     ; Load the flag
-    ld a, [bc]
+    ld a, [de]
     ; If the flag has 'solid', return with carry set
     rra
     ret c ; Return with carry set if collision happened
     ; If not, continue loop, noting that carry is reset
-    dec d
+    dec b
     ret z
 
     ; Add the map width
