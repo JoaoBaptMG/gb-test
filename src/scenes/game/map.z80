@@ -26,7 +26,7 @@ MapLoadTileset::
     ld a, [hl+] ; high byte of the size
     ld b, a
 
-    ; Save HL, load source
+    ; Save HL, load destination
     push hl
     ld hl, vBgBank1
 
@@ -39,10 +39,17 @@ MapLoadTileset::
     ld [wTilesetBank], a
     ld a, [hl+]
     ld [wTilesetPtrHigh], a
+
+    ; Write the flags to WRAM to save bankswitching
+    ld bc, wTilesetFlags
+
+.loopCopyFlags:            ; Copy the flags
     ld a, [hl+]
-    ld [wTilesetFlagsBank], a
-    ld a, [hl+]
-    ld [wTilesetFlagsPtrHigh], a
+    ld [bc], a
+    inc c
+    bit 7, c
+    jr z, .loopCopyFlags
+
     ret
 
 ;; Init the variables required to provide map autoscrolling
@@ -52,16 +59,14 @@ MapInit::
     ld [wMapWidth], a
 
     ; Calculate the maximum right position of the screen
-    ; It's 16 * width - 80
+    ; It's 16 * width - 88
     swap a
     ld b, a
     and a, $F0
-    sub a, 80
+    sub a, 88
     ld [wMaxCameraPositionRight], a
     ld a, b
-    jr nc, .noOverflow13
-    dec a
-.noOverflow13:
+    sbc a, 0
     and a, $0F
     ld [wMaxCameraPositionRight+1], a
 
@@ -70,16 +75,14 @@ MapInit::
     ld [wMapHeight], a
 
     ; Calculate the maximum bottom position of the screen
-    ; It's 16 * height - 64
+    ; It's 16 * height - 80
     swap a
     ld b, a
     and a, $F0
-    sub a, 64
+    sub a, 80
     ld [wMaxCameraPositionBottom], a
     ld a, b
-    jr nc, .noOverflow14
-    dec a
-.noOverflow14:
+    sbc a, 0
     and a, $0F
     ld [wMaxCameraPositionBottom+1], a
 
@@ -872,8 +875,6 @@ hCurStripAddr: db
 section "wram scenes/game/map.z80", wram0
 wTilesetBank: db
 wTilesetPtrHigh: db
-wTilesetFlagsBank:: db
-wTilesetFlagsPtrHigh:: db
 wMapWidth:: db
 wMapHeight:: db
 wMapWidthTimes9: dw
@@ -885,3 +886,6 @@ wPrevCameraOffsetX: dw
 wPrevCameraOffsetY: dw
 wMaxCameraPositionRight:: dw
 wMaxCameraPositionBottom:: dw
+
+section "aligned flags scenes/game/map.z80", wram0, align[8]
+wTilesetFlags:: ds 128

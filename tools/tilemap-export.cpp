@@ -106,7 +106,14 @@ int tilemapExport(int argc, char **argv)
     of << "    db BANK(" << inlabel << "_chars), LOW(" << inlabel << "_chars), HIGH(" << inlabel << "_chars)" << std::endl;
     of << "    dw " << (state.chars.size() * CharSize) << std::endl;
     of << "    db BANK(" << inlabel << "_tiles), HIGH(" << inlabel << "_tiles)" << std::endl;
-    of << "    db BANK(" << inlabel << "_flags), HIGH(" << inlabel << "_flags)" << std::endl << std::endl;
+
+    for (int i = 0; i < 128; i++)
+    {
+        if (i % 16 == 0) of << std::endl << "    db ";
+        else of << ", ";
+        of << state.flags[i];
+    }
+    of << std::endl;
 
     of << "section \"chars " << out <<  "\", romx" << std::endl;
     of << inlabel << "_chars:" << std::endl;
@@ -124,16 +131,6 @@ int tilemapExport(int argc, char **argv)
             of << (state.tiles[i][j] ^ 128);
         }
         of << std::endl;
-    }
-    of << std::endl;
-
-    of << "section \"flag data " << out <<  "\", romx, align[8]" << std::endl;
-    of << inlabel << "_flags:";
-    for (int i = 0; i < 128; i++)
-    {
-        if (i % 16 == 0) of << std::endl << "    db ";
-        else of << ", ";
-        of << state.flags[i];
     }
     of << std::endl;
 
