@@ -21,10 +21,6 @@ IRQ_VBlank::
     inc a
     ld [hVBlankFlag], a
 
-    ; Turn backgrounds/sprites off
-    ld a, %10000000
-    ld [rLCDC], a
-
     ; Process the command buffer
     call ProcessCommandBuffer
 
