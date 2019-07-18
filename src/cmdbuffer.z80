@@ -14,15 +14,13 @@ ReadCmdBuffer:
     ; Load the command parameters
     pop bc          ; b = fill byte (if applicable), c = word count & flags
     ld a, c
-    and c           ; Zero size, abort
-    jr z, SkipReadCmdBuffer
+    add a, a        ; Turn word count into byte count
+    jr z, SkipReadCmdBuffer ; Zero size, abort
     pop hl          ; Destination address
 
     ; Check command type
-    bit 7,c         ; bit7: 0 = copy, 1 = fill
-    jr z, PopslideCopy
-    ld a, c
-    rlca                        ; Transform word count into byte count
+    jr nc, PopslideCopy
+    ; Fill
     cpl                         ; Now a = 255 - byte count
     ld c, a                     ; Load popslide address
     ld a, b
@@ -31,12 +29,8 @@ ReadCmdBuffer:
     ret                         ; And push into it
 
 PopslideCopy:
-    bit 6, c        ; bit6: 0 = horizontal, 1 = vertical
-    jr nz, PopslideCopyVert
-    res 5, c        ; Cap (actually wrap) the amount of words picked
-    ld a, c
-    add a, a        ; Multiply by 5
-    add a, a
+    add a, a        ; bit6: 0 = horizontal, 1 = vertical
+    jr c, PopslideCopyVert
     add a, c
     sub a, 161      ; a = 5*c - 161
     cpl             ; a = ~(5*c - 161), since ~x = -x - 1, a = -5*c + 161 - 1 = 160 - 5*c
@@ -46,11 +40,6 @@ PopslideCopy:
     ret
 
 PopslideCopyVert:
-    res 6, c     ; Cap (actually wrap) the amount of words picked
-    res 5, c     ; Cap (actually wrap) the amount of words picked
-    ld a, c
-    add a, a        ; Multiply by 5
-    add a, a
     add a, c
     sub a, 161      ; a = 5*c - 161
     cpl             ; a = ~(5*c - 161), since ~x = -x - 1, a = -5*c + 161 - 1 = 160 - 5*c
