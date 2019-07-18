@@ -44,13 +44,13 @@ StableRandom::
 .advance_left_register
 	; in: hl: pointer to left register
 	; out: hl: pointer to RIGHT register
-	ld a, [hli]
+	ld a, [hl+]
 	ld e, a
-	ld a, [hli]
+	ld a, [hl+]
 	ld d, a
-	ld a, [hli]
+	ld a, [hl+]
 	ld c, a
-	ld a, [hld]
+	ld a, [hl-]
 	ld b, a
 	or c
 	or d
@@ -66,9 +66,9 @@ StableRandom::
 	xor b
 	ld c, a
 	ld a, c
-	ld [hld], a
+	ld [hl-], a
 	ld a, d
-	ld [hld], a
+	ld [hl-], a
 	ld [hl], e
 	sla e
 	rl d
@@ -76,13 +76,13 @@ StableRandom::
 	inc hl
 	ld a, [hl]
 	xor e
-	ld [hli], a
+	ld [hl+], a
 	ld a, [hl]
 	xor d
-	ld [hli], a
+	ld [hl+], a
 	ld a, [hl]
 	xor c
-	ld [hld], a
+	ld [hl-], a
 	ld b, a
 	ld c, [hl]
 	sla c
@@ -91,10 +91,10 @@ StableRandom::
 	and 1
 	dec hl
 	xor [hl]
-	ld [hld], a
+	ld [hl-], a
 	ld a, [hl]
 	xor b
-	ld [hli], a
+	ld [hl+], a
 	inc hl
 	inc hl
 	inc hl
@@ -117,19 +117,19 @@ StableRandom::
 	pop hl
 	inc hl
 	ld a, b
-	ld [hld], a ;only b needs to be written back, since the rest will be handled by the main function
+	ld [hl-], a ;only b needs to be written back, since the rest will be handled by the main function
 	ret
 
 .advance_right_register
 	; in: hl: pointer to right register
 	; out: hl preserved
-	ld a, [hli]
+	ld a, [hl+]
 	cp 210
 	jr c, .right_carry_OK
 	sub 210
 .right_carry_OK
 	ld d, a
-	ld a, [hli]
+	ld a, [hl+]
 	ld e, a
 	ld c, [hl]
 	or c
@@ -146,7 +146,7 @@ StableRandom::
 	call .reseed_right_register
 .right_register_OK
 	ld a, e
-	ld [hld], a
+	ld [hl-], a
 	push hl
 	ld b, 0
 	ld h, b
@@ -173,7 +173,7 @@ endm
 	ld a, l
 	ld b, h
 	pop hl
-	ld [hld], a
+	ld [hl-], a
 	ld [hl], b
 	ret
 
