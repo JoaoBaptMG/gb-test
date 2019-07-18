@@ -40,8 +40,9 @@ PopslideCopy:
     ret
 
 PopslideCopyVert:
+    ; c is actually 64 + number of words, so the number below is actually 5*c + 64
     add a, c
-    sub a, 161      ; a = 5*c - 161
+    add a, 31       ; a = 5*c + 64 + 31 = 5*c + 95 ≡ 5*c - 161 (mod 256)
     cpl             ; a = ~(5*c - 161), since ~x = -x - 1, a = -5*c + 161 - 1 = 160 - 5*c
     ld c, a         ; Load popslide address
     ld b, HIGH(PopslideCopyVertical)
@@ -98,4 +99,4 @@ wCommandBuffer:: ds 255
 wCommandBufferLast:: db
 
 section "hram cmdbuffer.z80", hram
-hSavedStackPtr: db
+hSavedStackPtr: dw
