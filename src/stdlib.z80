@@ -6,19 +6,19 @@
 section "bank 0 stdlib.z80", rom0
 
 ;;
-; Copies BC bytes from HL to DE.
+; Copies BC bytes from DE to HL.
 MemoryCopy::
     inc b
     inc c
     jr .begin
-.loop
-    ld a, [hli]
-    ld [de], a
+.loop:
+    ld a, [de]
+    ld [hl+], a
     inc de
-.begin
-    inc c
+.begin:
+    dec c
     jr nz, .loop
-    inc b
+    dec b
     jr nz, .loop
     ret
 
