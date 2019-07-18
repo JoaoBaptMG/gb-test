@@ -97,5 +97,4 @@ endr
 section "wram cmdbuffer.z80", wram0, align[8]
 wCommandBuffer:: ds 255
 wCommandBufferLast:: db
-
 wSavedStackPtr: dw
