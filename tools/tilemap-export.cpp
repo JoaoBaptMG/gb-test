@@ -73,6 +73,7 @@ int tilemapExport(int argc, char **argv)
     State state;
     int emptyid = state.addCharacter(Character());
     state.tiles.push_back({ emptyid, emptyid, emptyid, emptyid });
+    state.flags.push_back(0);
 
     int r;
     if (at0.is_string() && (r = processAutotile(state, folder + at0.get<std::string>(), at0s)) != 0) return r;

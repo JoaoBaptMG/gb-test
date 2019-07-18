@@ -316,7 +316,7 @@ idx set idx + 1
     jp nz, .horStripBegin
 
     ; With that, the map is ready
-    ; Store 10 times the map width to utilise it again
+    ; Store 9 times the map width to utilise it again
     ld h, d
     ld l, e         ; hl = 1 * de
     add hl, hl      ; hl = 2 * de
@@ -872,13 +872,13 @@ hCurStripAddr: db
 section "wram scenes/game/map.z80", wram0
 wTilesetBank: db
 wTilesetPtrHigh: db
-wTilesetFlagsBank: db
-wTilesetFlagsPtrHigh: db
+wTilesetFlagsBank:: db
+wTilesetFlagsPtrHigh:: db
 wMapWidth:: db
 wMapHeight:: db
 wMapWidthTimes9: dw
-wMapBank: db
-wMapAddress: dw
+wMapBank:: db
+wMapAddress:: dw
 wMapAddrCamera: dw
 wSavedScreenCoords: dw
 wPrevCameraOffsetX: dw

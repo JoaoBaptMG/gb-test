@@ -68,3 +68,15 @@ HLeqAxDE::
 .endMulLoop\@
     endr
     ret
+
+; Multiply A by DE and put in HL
+HLeqAxBC::
+    ld hl, 0    
+    rept 8
+    add hl, hl
+    rla
+    jr nc, .endMulLoopx\@
+    add hl, bc
+.endMulLoopx\@
+    endr
+    ret

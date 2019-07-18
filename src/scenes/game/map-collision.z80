@@ -1,0 +1,172 @@
+;
+; scenes/game/map-collision.z80
+; Contains the subroutines for box intersection with the tilemap
+;
+
+include "gameboy.inc"
+
+section "bank 0 scenes/game/map-collision.z80", rom0
+
+; Check collision with the tilemap
+; input:
+;    hl: a pointer to a structure containing
+;       - 16.8 X and Y positions (already added to speed)
+;    bc: the width of the box in 8.8 fixed point format (- $0.01)
+;    de: the height of the box in 8.8 fixed point format (- $0.01)
+; output:
+;    hl, bc, de will be scrapped
+;    bit 0 of a will be set or reset according to the collision
+CheckMapCollision::
+    ; Add the position to the width for the second position
+    push de
+    ld a, [hl+]         ; a = posX.0
+    push hl             ; push hl
+    ld h, [hl]          ; h = posX.1
+    ld l, a             ; hl = posX.10
+    add hl, bc          ; hl = (posX + width).10
+    ld e, h             ; e = int(posX + width).0
+    pop hl              ; hl = &posX.1 again
+    ld a, [hl+]         ; a = posX.1
+    ld b, h             ; stash hl into bc because
+    ld c, l             ; we don't need the width anymore
+    ld h, [hl]          ; h = posX.2
+    ld l, e             ; l = int(posX + width).0
+    ld d, h             ; d = posX.2             
+    jr nc, .noSecondCarry0  ; update h to the carry of the last addition
+    inc h               ; now hl = int(posX + width).10
+.noSecondCarry0:
+    add hl, hl
+    add hl, hl
+    add hl, hl
+    add hl, hl          ; turns h into a tile position
+    ld l, a             ; l = posX.1
+    ld a, h             ; a = tile position for last X
+    ld [hLastX], a      ; store it into memory
+    ld h, d             ; h = posX.2
+    add hl, hl          ; turns h into a tile position again
+    add hl, hl
+    add hl, hl
+    add hl, hl 
+    ld a, h             ; a = tile position for first x
+    ld [hFirstX], a     ; store it into memory
+    ld h, b             ; reload hl from bc
+    ld l, c
+    pop de              ; pop the height
+
+    ; hl still points to posX.2, so increment it so it points to posY.0
+    inc hl
+
+    ; Do the same thing for Y
+    ld a, [hl+]         ; a = posY.0
+    push hl             ; push hl
+    ld h, [hl]          ; h = posY.1
+    ld l, a             ; hl = posY.10
+    add hl, de          ; hl = (posY + height).10
+    ld e, h             ; e = int(posY + height).0
+    pop hl              ; hl = &posY.1 again
+    ld a, [hl+]         ; a = posY.1
+    ld h, [hl]          ; h = posY.2
+    ld l, e             ; l = int(posY + height).0
+    ld d, h             ; d = posY.2             
+    jr nc, .noSecondCarry1  ; update h to the carry of the last addition
+    inc h               ; now hl = int(posY + height).10
+.noSecondCarry1:
+    add hl, hl
+    add hl, hl
+    add hl, hl
+    add hl, hl          ; turns h into a tile position
+    ld l, a             ; l = posY.1
+    ld a, h             ; a = tile position for last Y
+    ld [hLastY], a      ; store it into memory
+    ld h, d             ; h = posY.2
+    add hl, hl          ; turns h into a tile position again
+    add hl, hl
+    add hl, hl
+    add hl, hl 
+    ld a, h             ; a = tile position for first y
+    ld [hFirstY], a     ; store it into memory
+
+    ; With the positions done, now we need to compute the addresses
+    ld d, 0
+    ld e, a
+    ld a, [wMapWidth]
+    call HLeqAxDE
+    ld a, [hFirstX]
+    ld e, a
+    add hl, de
+
+    ; load the map address
+    ld a, [wMapAddress]
+    ld e, a
+    ld a, [wMapAddress+1]
+    ld d, a
+    add hl, de
+
+    ; Load into c the difference hLastY - hFirstY + 1
+    ld a, [hFirstY]
+    ld c, a
+    ld a, [hLastY]
+    sub a, c
+    inc a
+    ld c, a             ; c = hLastY - hFirstY + 1
+
+    ; Finally, compute the necessary stride for the line
+    ld a, [hFirstX]     ; a = hFirstX
+    ld b, a             ; b = hFirstX
+    ld a, [hLastX]      ; a = hLastX
+    sub a, b            ; a = hLastX - hFirstX
+    inc a               ; a = hLastX - hFirstX + 1
+    ld [hLastX], a      ; hLastX will double as the number of x tiles
+    ld b, a             ; b = hLastX - hFirstX
+    ld a, [wMapWidth]   ; a = wMapWidth
+    sub a, b            ; a = wMapWidth - (hLastX - hFirstX + 1)
+    ld [hLastY], a      ; hLastY will double as the stride value
+
+    ; Now, we iterate for each X and each Y to find if some tile checks
+    ; Load the base address already
+    ld a, [wTilesetFlagsPtrHigh]
+    ld d, a
+
+.loop:
+    ; Change bank
+    ld a, [wMapBank]
+    ld [rROMB0], a
+    ; Load the tile present there
+    ld a, [hl+]
+    ld e, a
+    ; Change bank again
+    ld a, [wTilesetFlagsBank]
+    ld [rROMB0], a
+    ; Load the flag
+    ld a, [de]
+    ; If the flag has 'solid', jump to the collision detected routine
+    bit 0, a
+    jr nz, .collisionDetected
+    ; If not, continue loop
+    dec b
+    jr nz, .loop
+    ; Row done, check column
+    dec c
+    jr z, .collisionNotDetected     ; all rows done
+    ld a, [hLastX]  ; load difference
+    ld b, a
+    ld a, [hLastY]  ; load stride
+    add a, l        ; add to the address
+    ld l, a
+    jr nc, .loop    ; Back to the loop if not carry
+    inc h
+    jr .loop
+
+.collisionNotDetected:
+    res 0, a        ; bit 0 of a is set to 0
+    ret
+
+.collisionDetected:
+    set 0, a        ; bit 0 of a is set to 1
+    ret
+
+section "hram scenes/game/map-collision.z80", hram
+hFirstX: db
+hLastX: db
+hFirstY: db
+hLastY: db

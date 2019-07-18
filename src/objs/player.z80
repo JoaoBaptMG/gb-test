@@ -80,46 +80,46 @@ PlayerUpdate::
     SetDataFixed88 wPlayerSpdY, +1, 0
 
 .updatePosition:
-    ; Add the X-velocity to the X-position
-    ld hl, wPlayerSpdX
-    ld a, [hl+]
-    ld b, [hl]
+    call UpdatePosition
+
+    ; Call the collision routine
     ld hl, wPlayerX
-    add a, [hl]
-    ld [hl+], a
-    ld a, [hl]
-    adc a, b
-    ld [hl+], a
+    ld bc, 16*256 - 1
+    ld de, 32*256 - 1
+    call CheckMapCollision
 
-    ; Special check for addition carry (manual 2-complement)
-    ; if speed is positive: carry set = carry
-    ; if speed is negative: carry clear = carry
-    bit 7, b                ; check if the speed is positive
-    ld a, [hl]              ; load the third value
-    jr z, .xSpdPositive     ; if the speed is negative, "pre-carry" the value
-    dec a
-.xSpdPositive:
-    adc a, 0                ; apply the carry rule
-    ld [hl], a
+    ; If there was no collision, continue
+    bit 0, a
+    jr z, .updateCameraOffset
 
-    ; Add the Y-velocity to the Y-position
+    ; Negate X
+    ld hl, wPlayerSpdX
+    ld a, [hl]          ; a = wPlayerSpdX.0
+    cpl                 ; a = -wPlayerSpdX.0 - 1
+    inc a               ; a = -wPlayerSpdX.0
+    ld [hl+], a         ; reload
+    ld a, [hl]          ; a = wPlayerSpdX.1
+    cpl                 ; a = -wPlayerSpdX.1 - 1
+    jr c, .over0        ; only increment if not carry
+    inc a
+.over0:
+    ld [hl], a          ; correctly negated
+
+    ; Negate Y
     ld hl, wPlayerSpdY
-    ld a, [hl+]
-    ld b, [hl]
-    ld hl, wPlayerY
-    add a, [hl]
-    ld [hl+], a
-    ld a, [hl]
-    adc a, b
-    ld [hl+], a
+    ld a, [hl]          ; a = wPlayerSpdY.1
+    cpl                 ; a = -wPlayerSpdY.1 - 1
+    inc a               ; a = -wPlayerSpdY.1
+    ld [hl+], a         ; reload
+    ld a, [hl]          ; a = wPlayerSpdY.1
+    cpl                 ; a = -wPlayerSpdY.1 - 1
+    jr c, .over1
+    inc a
+.over1:
+    ld [hl], a          ; correctly negated
 
-    bit 7, b                ; check if the speed is positive
-    ld a, [hl]              ; load the third value
-    jr z, .ySpdPositive     ; if the speed is negative, "pre-carry" the value
-    dec a
-.ySpdPositive:
-    adc a, 0                ; apply the carry rule
-    ld [hl], a
+    ; Restore the position
+    call UpdatePosition
 
 .updateCameraOffset:
     ; Update the camera offset
@@ -129,12 +129,12 @@ PlayerUpdate::
     ld c, a
     ld b, [hl]
 
-    ; Check if the pos is < 80
+    ; Check if the pos is < 72
     ld a, b
     and a
     jr nz, .xPositive
     ld a, c
-    cp a, 80
+    cp a, 72
     jr nc, .xPositive
 
     ; Clamp camera offset to 0
@@ -158,9 +158,9 @@ PlayerUpdate::
 
     ; here, either hmax < b or (hmax = b and lmax < c)
 .setXRight:
-    ; Clamp camera offset to (max position - 80)
+    ; Clamp camera offset to (max position - 72)
     ld a, [hl]
-    sub a, 80
+    sub a, 72
     ld hl, wCameraOffsetX
     ld [hl+], a
     jr nc, .noOverflow3
@@ -170,9 +170,9 @@ PlayerUpdate::
     jr .checkY
 
 .setXNormal:
-    ; Set camera offset to (player X - 80)
+    ; Set camera offset to (player X - 72)
     ld a, c
-    sub a, 80
+    sub a, 72
     ld hl, wCameraOffsetX
     ld [hl+], a
     jr nc, .noOverflow0
@@ -187,12 +187,12 @@ PlayerUpdate::
     ld c, a
     ld b, [hl]
 
-    ; Check if the pos is < 64
+    ; Check if the pos is < 48
     ld a, b
     and a
     jr nz, .yPositive
     ld a, c
-    cp a, 64
+    cp a, 48
     jr nc, .yPositive
 
     ; Clamp camera offset to 0
@@ -216,10 +216,10 @@ PlayerUpdate::
 
     ; here, either hmax < b or (hmax = b and lmax < c)
 .setYDown:
-    ; Clamp camera offset to (max position - 64)
+    ; Clamp camera offset to (max position - 48)
     ld b, a
     ld a, [hl]
-    sub a, 64
+    sub a, 48
     ld hl, wCameraOffsetY
     ld [hl+], a
     jr nc, .noOverflow4
@@ -229,10 +229,10 @@ PlayerUpdate::
     jr .addSprite
 
 .setYNormal:
-    ; Set camera offset to (player Y - 64)
+    ; Set camera offset to (player Y - 48)
     ld hl, wCameraOffsetY
     ld a, c
-    sub a, 64
+    sub a, 48
     ld [hl+], a
     jr nc, .noOverflow1
     dec b
@@ -248,12 +248,14 @@ PlayerUpdate::
     ld d, a
     ld a, [wPlayerY+1]
     sub a, d
+    add a, 16
     ld b, a
     ld [hl+], a
     ld a, [wCameraOffsetX]
     ld d, a
     ld a, [wPlayerX+1]
     sub a, d
+    add a, 8
     ld c, a
     ld [hl+], a
     xor a
@@ -294,4 +296,45 @@ PlayerUpdate::
     xor a
     ld [hl+], a
 
+    ret
+
+; Helper routine
+UpdatePosition:
+    ; Add the X-velocity to the X-position
+    ld hl, wPlayerSpdX
+    ld a, [hl+]
+    ld b, [hl]
+    ld hl, wPlayerX
+    add a, [hl]
+    ld [hl+], a
+    ld a, [hl]
+    adc a, b
+    ld [hl+], a
+
+    ; Special check for addition carry (manual 2-complement)
+    ; For each of the cases: no carry & b.7 = 0 | carry & b.7 = 0  | no carry & b.7 = 1 | carry & b.7 = 1  |
+    sbc a, a               ; a = 0              | a = -1           | a = 0              | a = -1           |
+    rl b                   ; carry = 0          | carry = 0        | carry = 1          | carry = 1        |
+    ld b, a                ; b = 0              | b = -1           | b = 0              | b = -1           |
+    ld a, [hl]             ; a = [hl], b = 0    | a = [hl], b = -1 | a = [hl], b = 0    | a = [hl], b = -1 |
+    sbc a, b               ; a = [hl]           | a = [hl]+1       | a = [hl]-1         | a = [hl]         |
+    ld [hl], a             ; expected behavior in all cases
+
+    ; Add the Y-velocity to the Y-position
+    ld hl, wPlayerSpdY
+    ld a, [hl+]
+    ld b, [hl]
+    ld hl, wPlayerY
+    add a, [hl]
+    ld [hl+], a
+    ld a, [hl]
+    adc a, b
+    ld [hl+], a
+
+    sbc a, a
+    rl b
+    ld b, a
+    ld a, [hl]
+    sbc a, b
+    ld [hl], a
     ret
