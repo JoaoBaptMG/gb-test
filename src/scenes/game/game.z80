@@ -72,20 +72,20 @@ GameScene_Init::
 
     ; Prepare for LDC turn on
     ld a, %11100111
-    ld [hShLCDC], a     ; Turn sprites, backgrounds and window on, spritex 8x16
+    ldh [hShLCDC], a     ; Turn sprites, backgrounds and window on, spritex 8x16
 
     ; Set default palettes
     ld a, %11100100
-    ld [hShBGP], a
-    ld [hShOBP0], a
+    ldh [hShBGP], a
+    ldh [hShOBP0], a
     ld a, %10010000
-    ld [hShOBP1], a
+    ldh [hShOBP1], a
 
     ; Set window position
     ld a, 7
-    ld [hShWX], a
+    ldh [hShWX], a
     ld a, 128
-    ld [hShWY], a
+    ldh [hShWY], a
 
     ; Turn LCD on
     ld a, %10000000

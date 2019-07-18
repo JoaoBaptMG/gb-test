@@ -84,23 +84,23 @@ Start::
     jr nz, .clearCB
 
     ; Clear all hardware registers
-    ld [hShLCDC], a
-    ld [hShSTAT], a
-    ld [hShSCY], a
-    ld [hShSCX], a
-    ld [hShLYC], a
-    ld [hShBGP], a
-    ld [hShOBP0], a
-    ld [hShOBP1], a
-    ld [hShWY], a
-    ld [hShWX], a
+    ldh [hShLCDC], a
+    ldh [hShSTAT], a
+    ldh [hShSCY], a
+    ldh [hShSCX], a
+    ldh [hShLYC], a
+    ldh [hShBGP], a
+    ldh [hShOBP0], a
+    ldh [hShOBP1], a
+    ldh [hShWY], a
+    ldh [hShWX], a
 
     ; Transfer OAM DMA transfer routine
     call CopyDMATransferRoutineToHRAM
 
     ; Reset the vblank flag - IMPORTANT!
     ld a, 1
-    ld [hVBlankFlag], a
+    ldh [hVBlankFlag], a
 
     ; Ask for VBlank interrupt (using previous a = 1)
     ld [rIE], a
