@@ -23,7 +23,7 @@ ROBJ_FILES = $(addprefix robj/, $(RESOURCE_FILES:odata/%.z80=%.o))
 ASM_FLAGS := -i src/
 
 # paths (remember to replace those paths)
-GBEMU := C:/Users/jbapt/Desktop/bgb/bgb64.exe
+GBEMU := C:/Users/jbapt/Desktop/bgb/bgb.exe
 TILED := C:/Users/jbapt/source/repos/build-tiled-Desktop_Qt_5_12_3_MSVC2017_64bit-Release/Release/install-root/tiled.exe
 
 # Keep all intermediary files (maps, assembly and such) around

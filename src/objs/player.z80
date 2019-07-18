@@ -82,7 +82,7 @@ PlayerUpdate::
 .checkForJump:
     ; Check if the jump is pressed
     ldh a, [hJoypadTrigger]
-    bit PADB_B, a
+    bit PADB_A, a
     jr z, .checkForJumpDecay
 
     ; If the speed is zero, jump
@@ -103,7 +103,7 @@ PlayerUpdate::
 .checkForJumpDecay:
     ; If jump is not released, ignore
     ldh a, [hJoypadRelease]
-    bit PADB_B, a
+    bit PADB_A, a
     jr z, .applyGravity
 
     ; If the speed is negative, check if it is "less" than the decay speed
