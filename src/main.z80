@@ -19,6 +19,10 @@ Start::
     ; Load stack pointer to top of WRAM
     ld sp, _RAM+$2000
 
+    ; Load a clean state for the joypad
+    xor a
+    ldh [hJoypadPress], a
+
 .waitForVblank:
     ld a, [rLY]
     cp a, $90
