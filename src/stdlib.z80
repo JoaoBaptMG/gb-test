@@ -8,31 +8,18 @@ section "bank 0 stdlib.z80", rom0
 ;;
 ; Copies BC bytes from HL to DE.
 MemoryCopy::
-    ld a, e
-    add c
-    jr c, .noOverflow
-    dec b
-.noOverflow
     inc b
-    jr z, .loop2
-    and a
-    ld c, a
-    jr z, .handleLoop
-.loop1
-    ld a, [de]
-    ld [hl+], a
-    inc e
-    jr nz, .loop1
-    inc d
-.handleLoop
-    dec b
-    jr nz, .loop1
-.loop2
-    ld a, [de]
-    ld [hl+], a
-    inc e
-    dec c
-    jr nz, .loop2
+    inc c
+    jr .begin
+.loop
+    ld a, [hli]
+    ld [de], a
+    inc de
+.begin
+    inc c
+    jr nz, .loop
+    inc b
+    jr nz, .loop
     ret
 
 ;;
