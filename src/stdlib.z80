@@ -23,6 +23,36 @@ MemoryCopy::
     ret
 
 ;;
+; Fills BC bytes in HL with A
+MemoryFill::
+    inc b
+    inc c
+    jr .begin
+.loop:
+    ld [hl+], a
+.begin:
+    dec c
+    jr nz, .loop
+    dec b
+    jr nz, .loop
+    ret
+
+; Dynamic call from BC
+DynamicBC::
+    push bc
+    ret
+
+; Dynamic call from DE
+DynamicDE::
+    push de
+    ret
+
+; Dynamic call from HL
+DynamicHL::
+    push hl
+    ret
+
+;;
 ; Copy a full screen tilemap to VRAM
 CopyFullScreenVRAM::
     ld c, 18

@@ -94,7 +94,9 @@ endr
     jp PostPopslideRoutine
 
 ; Command buffer, used to buffering graphics writes to VRAM
-section "wram cmdbuffer.z80", wram0, align[8]
+section "wram-cmdbuffer cmdbuffer.z80", wram0, align[8]
 wCommandBuffer:: ds 255
 wCommandBufferLast:: db
+
+section "wram cmdbuffer.z80", wram0
 wSavedStackPtr: dw

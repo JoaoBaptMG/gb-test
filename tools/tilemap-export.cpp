@@ -113,7 +113,7 @@ int tilemapExport(int argc, char **argv)
         else of << ", ";
         of << state.flags[i];
     }
-    of << std::endl;
+    of << std::endl << std::endl;
 
     of << "section \"chars " << out <<  "\", romx" << std::endl;
     of << inlabel << "_chars:" << std::endl;

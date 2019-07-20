@@ -13,7 +13,9 @@ TILESET_OUT := $(TILESET_FILES:data/tilesets/%.json=odata/tilesets/%.z80)
 MAP_PREFILES := $(wildcard tiled-maps/*.tmx)
 MAP_FILES := $(MAP_PREFILES:tiled-maps/%.tmx=data/maps/%.json)
 MAP_OUT := $(MAP_FILES:data/maps/%.json=odata/maps/%.z80)
-RESOURCE_FILES := $(SPRITE_OUT) $(TILESET_OUT) $(MAP_OUT)
+ACTORS_FILE := data/actors.json
+ACTORS_OUT := odata/actors.z80
+RESOURCE_FILES := $(SPRITE_OUT) $(TILESET_OUT) $(MAP_OUT) $(ACTORS_OUT)
 
 # Compilation
 SRC_FILES := $(call rwildcard, src/, *.z80)
@@ -64,9 +66,13 @@ data/maps/%.json: tiled-maps/%.tmx
 	@mkdir -p $(@D)
 	$(TILED) --export-map json $< $@
 
-odata/maps/%.z80: data/maps/%.json tools/tools.exe
+odata/maps/%.z80: data/maps/%.json data/actors.json tools/tools.exe
 	@mkdir -p $(@D)
-	tools/tools.exe map-export $< $@
+	tools/tools.exe map-export $< $@ data/actors.json
+
+odata/actors.z80: data/actors.json tools/tools.exe
+	@mkdir -p $(@D)
+	tools/tools.exe actor-export $< $@
 
 tools/tools.exe: $(TOOL_SRCS)
 	g++ -std=c++14 -Wall -O0 -g -o $@ $^

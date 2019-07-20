@@ -16,40 +16,17 @@ GameScene_Init::
     xor a
     ld [rLCDC], a
 
-    ; Copy the mosaic
-    ld hl, vBgBank2 + $800 - (data_sprites_mosaic_png_end - data_sprites_mosaic_png)
-    ld de, data_sprites_mosaic_png
-    ld bc, data_sprites_mosaic_png_end - data_sprites_mosaic_png
-    call MemoryCopy
-
-    ; Populate the mosaic
-    ld hl, _SCRN1
-    ld b, 10
-    ld a, 124
-.mosaicLoop:
-    ld [hl+], a
-    inc a
-    ld [hl+], a
-    dec a
-    dec b
-    jr nz, .mosaicLoop
-
-    ld hl, _SCRN1 + 32
-    ld b, 10
-    ld a, 126
-.mosaicLoop2:
-    ld [hl+], a
-    inc a
-    ld [hl+], a
-    dec a
-    dec b
-    jr nz, .mosaicLoop2
+    ; Put the mosaic
+    call PopulateMosaic
 
     ; Load the player data
     call PlayerLoadData
 
     ; Initialize the player
     call PlayerInit
+
+    ; Populate the actor list with empty actors
+    call ActorsInit
 
     ; Load the tileset
     ld hl, data_tilesets_level1_json
@@ -58,6 +35,10 @@ GameScene_Init::
     ; Init the map, setting the begin parameters
     ld hl, data_maps_level1_json
     call MapInit
+
+    ; Clear the OAM pointer
+    xor a
+    ldh [hOAMPointer], a
 
     ; Update the player the first time
     call PlayerUpdate
@@ -96,8 +77,61 @@ GameScene_Init::
 GameScene_Loop:
     call WaitForVBlank
 
+    ; Clear shadow OAM
+    xor a
+    ld hl, wShadowOAM
+    ld c, 236
+
+.clearOAM:
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    ld [hl+], a
+    inc c
+    jr nz, .clearOAM
+
+    ; Clear the OAM pointer
+    xor a
+    ldh [hOAMPointer], a
+
     ; loop scene
     call PlayerUpdate
     call MapUpdate
+    call ActorsUpdate
+
     jr GameScene_Loop
 
+PopulateMosaic:
+    ; Copy the mosaic
+    ld hl, vBgBank2 + $800 - (data_sprites_mosaic_png_end - data_sprites_mosaic_png)
+    ld de, data_sprites_mosaic_png
+    ld bc, data_sprites_mosaic_png_end - data_sprites_mosaic_png
+    call MemoryCopy
+
+    ; Populate the mosaic
+    ld hl, _SCRN1
+    ld b, 10
+    ld a, 124
+.mosaicLoop:
+    ld [hl+], a
+    inc a
+    ld [hl+], a
+    dec a
+    dec b
+    jr nz, .mosaicLoop
+
+    ld hl, _SCRN1 + 32
+    ld b, 10
+    ld a, 126
+.mosaicLoop2:
+    ld [hl+], a
+    inc a
+    ld [hl+], a
+    dec a
+    dec b
+    jr nz, .mosaicLoop2
+    ret

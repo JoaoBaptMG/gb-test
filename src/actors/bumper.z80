@@ -1,0 +1,330 @@
+;
+; actors/bumper.z80
+; Contains the functions for invalid IDs and no actors
+;
+
+include "gameboy.inc"
+include "structs.inc"
+
+    struct Bumper
+    bytes 3, X
+    bytes 3, Y
+    bytes 2, SpdX
+    bytes 2, SpdY
+    end_struct
+
+BBoxWidth equ 16*256
+BBoxHeight equ 16*256
+
+section "bank 0 actors/bumper.z80", rom0
+; Structure of the graphics table
+; size - bank - address
+Bumper_GraphicsTable::
+    db data_sprites_enemies_bumper_png_end - data_sprites_enemies_bumper_png
+    db BANK(data_sprites_enemies_bumper_png)
+    dw data_sprites_enemies_bumper_png
+    db 0
+
+section "bank x actors/bumper.z80", romx
+
+; Calling convention for the init routine
+; - bc: the initialization struct
+; - hl: the allocated region for the actor
+; the init routine should point bc right after the initialization struct
+Bumper_Init::
+    ; Put the required parameters in their positions
+    xor a           ; Zero (subpixel X)
+    ld [hl+], a
+
+    ld a, [bc]
+    ld [hl+], a     ; Low X
+    inc bc
+
+    ld a, [bc]
+    ld [hl+], a     ; High X
+    inc bc
+
+    xor a           ; Zero (subpixel Y)
+    ld [hl+], a
+
+    ld a, [bc]
+    ld [hl+], a     ; Low Y
+    inc bc
+
+    ld a, [bc]
+    ld [hl+], a     ; High Y
+    inc bc
+
+    xor a           
+    ld [hl+], a     ; Low speed X
+    dec a
+    ld [hl+], a     ; High speed X
+    inc a
+    ld [hl+], a     ; Low speed Y
+    inc a
+    ld [hl+], a     ; High speed Y
+    ret
+
+; Calling convention for the update function:
+;   hl - address of allocated region for that actor
+Bumper_Update::
+    ; Add the Y-velocity to the Y-position
+    set 3, l        ; l = x8 -> y velocity
+    ld a, [hl+]     ; l = x9
+    ld b, [hl]
+    res 3, l        ; l = x1
+    set 1, l        ; l = x3 -> y position
+    add a, [hl]
+    ld [hl+], a
+    ld a, [hl]
+    adc a, b
+    ld [hl+], a
+
+    ; Special check for addition carry (manual 2-complement)
+    ; For each of the cases: no carry & b.7 = 0 | carry & b.7 = 0  | no carry & b.7 = 1 | carry & b.7 = 1  |
+    sbc a, a               ; a = 0              | a = -1           | a = 0              | a = -1           |
+    rl b                   ; carry = 0          | carry = 0        | carry = 1          | carry = 1        |
+    jr nc, .collisionMovingDown
+
+    ; Here, the Y speed is negative
+    ld b, a                ; b = 0              | b = -1           | b = 0              | b = -1           |
+    ld a, [hl]             ; a = [hl], b = 0    | a = [hl], b = -1 | a = [hl], b = 0    | a = [hl], b = -1 |
+    sbc a, b               ; a = [hl]           | a = [hl]+1       | a = [hl]-1         | a = [hl]         |
+    ld [hl-], a            ; expected behavior in all cases
+
+    ; here, l = x4
+    res 2, l        ; l = x0 -> x position
+
+    ; Check for vertical collision
+    ld bc, BBoxWidth - 1                ; the width of the bbox minus $0.01
+    ld de, 0                            ; zero, since the speed is negative
+    ld a, BANK(@)                       ; load the current bank
+    call CheckHorizontalLineCollision
+
+    ; If no collision, skip this step
+    jr nc, .updateX
+
+    ; Set the Y speed to positive
+    set 3, l                            ; l = x8 -> y speed
+    xor a
+    ld [hl+], a
+    ld a, 1
+    ld [hl-], a
+    res 3, l                            ; l = x0 -> back to begin
+    jr .updateCameraOffset
+
+.collisionMovingDown:
+    ; Here, the Y speed is positive
+    ld b, a                ; b = 0              | b = -1           | b = 0              | b = -1           |
+    ld a, [hl]             ; a = [hl], b = 0    | a = [hl], b = -1 | a = [hl], b = 0    | a = [hl], b = -1 |
+    sbc a, b               ; a = [hl]           | a = [hl]+1       | a = [hl]-1         | a = [hl]         |
+    ld [hl-], a            ; expected behavior in all cases
+
+    ; here, l = x4
+    res 2, l        ; l = x0 -> x position
+
+    ; Check for vertical collision
+    ld bc, BBoxWidth - 1                ; the width of the bbox minus $0.01
+    ld de, BBoxHeight - 1               ; we want to check the bottom row
+    ld a, BANK(@)
+    call CheckHorizontalLineCollision
+
+    ; If no collision, skip this step
+    jr nc, .updateX
+
+    ; Set the Y speed to negative
+    set 3, l                            ; l = x8 -> y speed
+    xor a
+    ld [hl+], a
+    ld a, -1
+    ld [hl-], a
+    res 3, l                            ; l = x0 -> back to begin
+    jr .updateCameraOffset
+
+.updateX:
+    ; Add the X-velocity to the X-position
+    set 1, l            ; l = x2
+    set 2, l            ; l = x6 -> x velocity
+    ld a, [hl+]         ; l = x7
+    ld b, [hl]
+    inc l               ; l = x8
+    res 3, l            ; l = x0 -> x position
+    add a, [hl]
+    ld [hl+], a
+    ld a, [hl]
+    adc a, b
+    ld [hl+], a         ; l = x2
+
+    sbc a, a
+    rl b
+    jr nc, .collisionMovingRight
+
+    ; Here, the X speed is negative
+    ld b, a
+    ld a, [hl]
+    sbc a, b
+    ld [hl-], a     ; l = x1
+
+    dec l           ; l = x0
+
+    ; Check for vertical collision
+    ld bc, 0                             ; zero, since the speed is negative
+    ld de, BBoxHeight - 1                ; the height of the bbox minus $0.01
+    ld a, BANK(@)
+    call CheckVerticalLineCollision
+
+    ; If no collision, skip this step
+    jr nc, .updateCameraOffset
+
+    ; Set the X speed to positive
+    set 1, l
+    set 2, l                            ; l = x6 -> x speed
+    xor a
+    ld [hl+], a
+    ld a, 1
+    ld [hl+], a                         ; l = x8
+    res 3, l                            ; l = x0 -> back to begin
+
+    ; Clamp the bumper to a tile boundary
+    xor a
+    ld [hl+], a         ; Zero subpixels; l = x1
+    ld a, [hl]          ; Add 1 tile
+    and a, $F0
+    add a, 16
+    ld [hl+], a         ; l = x2
+    jr nc, .updateCameraOffset     ; Update the high byte if necessary
+    inc [hl]
+    jr .updateCameraOffset
+
+.collisionMovingRight:
+    ; Here, the X speed is positive
+    ld b, a
+    ld a, [hl]
+    sbc a, b
+    ld [hl-], a     ; l = x1
+
+    dec l           ; l = x0
+
+    ; Check for vertical collision
+    ld bc, BBoxWidth - 1                ; we want to check the bottom row
+    ld de, BBoxHeight - 1               ; the height of the bbox minus $0.01
+    ld a, BANK(@)
+    call CheckVerticalLineCollision
+
+    ; If no collision, skip this step
+    jr nc, .updateCameraOffset
+
+    ; Set the X speed to negative
+    set 2, l
+    set 1, l                            ; l = x6 -> x speed
+    xor a
+    ld [hl+], a
+    ld a, -1
+    ld [hl+], a                         ; l = x8
+    res 3, l                            ; l = x0 -> back to begin
+
+    ; Correct the X position
+    xor a
+    ld [hl+], a                         ; l = x1
+    ld a, [hl]
+    and $f0
+    ld [hl-], a                         ; l = x0
+
+.updateCameraOffset:
+    ; Here, l is either x2 or x0
+    res 1, l        ; l = x0
+
+    ; Get the updated view positions for the actor
+    ; First, camera X
+    ldh a, [hCameraOffsetX]
+    ld b, a
+    inc hl
+    ld a, [hl+]             ; a = global x
+    sub a, b                ; a = global x - camera x
+    ld b, a                 ; b = global x - camera x
+    ldh a, [hCameraOffsetX+1]
+    ld c, a
+    ld a, [hl+]             ; a = high of global x
+    sbc a, c                ; a = high of global x - high of camera x
+    jr z, .checkIntervalX   ; Check right side if necessary
+    inc a                   ; If the high byte is not $FF, then return
+    ret nz
+
+    ld a, -16
+    cp a, b                  ; Check if the local x position is less than or equal to -16
+    ret nc                   ; If it is, return
+    jr .computeY
+
+.checkIntervalX:
+    ld a, b
+    cp a, 160                ; Check if the local x position is greater than or equal to 160
+    ret nc                   ; If it is, return
+
+.computeY:
+    ; Now, camera Y
+    ldh a, [hCameraOffsetY]
+    ld c, a
+    inc hl
+    ld a, [hl+]             ; a = global y
+    sub a, c                ; a = global y - camera y
+    ld c, a                 ; c = global y - camera y
+    ldh a, [hCameraOffsetY+1]
+    ld d, a
+    ld a, [hl+]             ; a = high of global y
+    sbc a, d                ; a = high of global y - high of camera y
+    jr z, .checkIntervalY   ; Check right side if necessary
+    inc a                   ; If the high byte is not $FF, then return
+    ret nz
+
+    ld a, -16
+    cp a, c                  ; Check if the local y position is less than or equal to -16
+    ret nc                   ; If it is, return
+    jr .updateOAM
+
+.checkIntervalY:
+    ld a, c
+    cp a, 128                ; Check if the local y position is greater than or equal to 128
+    ret nc                   ; If it is, return
+
+.updateOAM:
+    ; Add two OAM entries for the bumper
+    ldh a, [hOAMPointer]    ; Check if there is space first
+    cp a, 160
+    ret nc                  ; If there is not, simply bail out
+    ld l, a
+    ld h, HIGH(wShadowOAM)
+
+    ; First entry
+    ld a, c                 ; Y Position
+    add a, 16
+    ld [hl+], a
+    ld a, b                 ; X Position
+    add a, 8
+    ld [hl+], a
+    ld a, [wSlot_Bumper]    ; Tile index
+    ld [hl+], a
+    ld a, %00000000         ; Attributes
+    ld [hl+], a
+
+    ; Check if we ran out of objects
+    ld a, l
+    cp a, 160
+    jr nc, .earlyError
+
+    ; Second entry
+    ld a, c                 ; Y Position
+    add a, 16
+    ld [hl+], a
+    ld a, b                 ; X Position
+    add a, 16
+    ld [hl+], a
+    ld a, [wSlot_Bumper]    ; Tile index
+    add a, 2
+    ld [hl+], a
+    ld a, %00000000         ; Attributes
+    ld [hl+], a
+
+    ld a, l                 ; Return early
+.earlyError:
+    ldh [hOAMPointer], a
+    ret

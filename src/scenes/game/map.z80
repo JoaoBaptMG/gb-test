@@ -93,7 +93,11 @@ MapInit::
     ld [wMapAddress], a
     ld a, [hl+]
     ld [wMapAddress+1], a
-    ret
+
+    ; Load the graphics
+    call ActorsLoadGraphicsTypes
+    ; Load all the map actors
+    jp ActorsLoadFromMap
 
 ; Compute the screen coords
 ; inputs
@@ -120,16 +124,16 @@ ComputeScreenCoords:
 
 ; Do the initial copy of the screen
 MapLoadFirstScreen::
-    ld a, [wCameraOffsetX]
+    ldh a, [hCameraOffsetX]
     and a, $F0
     ld [wPrevCameraOffsetX], a
-    ld a, [wCameraOffsetX+1]
+    ldh a, [hCameraOffsetX+1]
     ld [wPrevCameraOffsetX+1], a
 
-    ld a, [wCameraOffsetY]
+    ldh a, [hCameraOffsetY]
     and a, $F0
     ld [wPrevCameraOffsetY], a
-    ld a, [wCameraOffsetY+1]
+    ldh a, [hCameraOffsetY+1]
     ld [wPrevCameraOffsetY+1], a
 
     ; Compute screen coords and map address
@@ -144,7 +148,7 @@ MapLoadFirstScreen::
     ld d, 0
 
     ; Load (again) the camera offset Y*16 in HL
-    ld hl, wCameraOffsetY
+    ld hl, hCameraOffsetY
     ld a, [hl+]
     ld h, [hl]
     ld l, a
@@ -163,7 +167,7 @@ MapLoadFirstScreen::
     ld b, h
 
     ; Load the camera offset X*16 in HL, divide by 256 and add BC to it
-    ld hl, wCameraOffsetX
+    ld hl, hCameraOffsetX
     ld a, [hl+]
     ld h, [hl]
     ld l, a
@@ -338,24 +342,24 @@ MapUpdate::
     ; Compare the camera offset's X with its previous offset
     ld a, [wPrevCameraOffsetX+1]
     ld b, a
-    ld a, [wCameraOffsetX+1]
-    cp a, b                         ; HI(wCameraOffsetX) vs HI(wPrevCameraOffsetX)
+    ldh a, [hCameraOffsetX+1]
+    cp a, b                         ; HI(hCameraOffsetX) vs HI(wPrevCameraOffsetX)
     jp c, .populateLeftUpdate       ; jump if a < b
     jr nz, .populateRightUpdate     ; here, a >= b - jump if a != b (so a > b)
 
     ld a, [wPrevCameraOffsetX]
     ld b, a
-    ld a, [wCameraOffsetX]
+    ldh a, [hCameraOffsetX]
     and a, $F0
-    cp a, b                         ; LO(wCameraOffsetX) vs LO(wPrevCameraOffsetX)
+    cp a, b                         ; LO(hCameraOffsetX) vs LO(wPrevCameraOffsetX)
     jp c, .populateLeftUpdate       ; jump if a < b
     jr nz, .populateRightUpdate     ; here, a >= b - jump if a != b (so a > b)
 
 .afterX:
     ; Put into the shadow registers the values of the camera offset
-    ld a, [wCameraOffsetX+1]
+    ldh a, [hCameraOffsetX+1]
     ld [wPrevCameraOffsetX+1], a
-    ld a, [wCameraOffsetX]
+    ldh a, [hCameraOffsetX]
     ldh [hShSCX], a
     and a, $F0
     ld [wPrevCameraOffsetX], a
@@ -363,23 +367,23 @@ MapUpdate::
     ; Compare the camera offset's Y with its previous offset
     ld a, [wPrevCameraOffsetY+1]
     ld b, a
-    ld a, [wCameraOffsetY+1]
-    cp a, b                         ; HI(wCameraOffsetY) vs HI(wPrevCameraOffsetY)
+    ldh a, [hCameraOffsetY+1]
+    cp a, b                         ; HI(hCameraOffsetY) vs HI(wPrevCameraOffsetY)
     jp c, .populateTopUpdate        ; jump if a < b
     jp nz, .populateBottomUpdate    ; here, a >= b - jump if a != b (so a > b)
 
     ld a, [wPrevCameraOffsetY]
     ld b, a
-    ld a, [wCameraOffsetY]
+    ldh a, [hCameraOffsetY]
     and a, $F0
-    cp a, b                         ; LO(wCameraOffsetY) vs LO(wPrevCameraOffsetY)
+    cp a, b                         ; LO(hCameraOffsetY) vs LO(wPrevCameraOffsetY)
     jp c, .populateTopUpdate        ; jump if a < b
     jp nz, .populateBottomUpdate    ; here, a >= b - jump if a != b (so a > b)
 
 .afterY:
-    ld a, [wCameraOffsetY+1]
+    ldh a, [hCameraOffsetY+1]
     ld [wPrevCameraOffsetY+1], a
-    ld a, [wCameraOffsetY]
+    ldh a, [hCameraOffsetY]
     ldh [hShSCY], a
     and a, $F0
     ld [wPrevCameraOffsetY], a

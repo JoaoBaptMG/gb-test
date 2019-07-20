@@ -1,5 +1,7 @@
 #include <iostream>
 #include <fstream>
+#include <set>
+#include "actor-export.hpp"
 #include "char.hpp"
 #include "nlohmann/json.hpp"
 
@@ -7,12 +9,15 @@ std::string pickTilesetName(const nlohmann::json& j);
 
 struct RemappingInterval { int from, to, size; };
 
+struct Actor { int type; std::vector<std::uint8_t> bytes; };
+
 int addBlankRemappingInterval(const nlohmann::json& j, std::vector<RemappingInterval> &remappingInterval, int& curValue);
 int addAutotileRemappingIntervals(const nlohmann::json& j, const std::string& at,
     std::vector<RemappingInterval> &remappingInterval, int& curValue);
 int addTilesetRemappingInterval(const nlohmann::json& j, const std::string& tset,
     std::vector<RemappingInterval> &remappingInterval, int& curValue);
 int getMapData(const nlohmann::json& j, std::vector<int>& data, int& width, int& height);
+int getActorData(const nlohmann::json& j, std::vector<Actor>& data, std::string actorFile);
 
 inline static nlohmann::json get(const nlohmann::json& j, const std::string& key)
 {
@@ -94,16 +99,41 @@ int mapExport(int argc, char **argv)
             }
         }
 
+    std::vector<Actor> actors;
+    std::set<std::size_t> presentTypes;
+    if ((r = getActorData(j, actors, argv[4]))) return r;
+    if (actors.size() > 32)
+    {
+        std::cout << "Error parsing map " << in << ": there can only be a maximum of 32 objects!" << std::endl;
+        return -1;
+    }
+
+    for (const auto& actor : actors)
+        presentTypes.insert(actor.type);
+
     std::ofstream of(out);
     of << "; " << std::endl;
     of << "; " << out << std::endl;
     of << "; " << std::endl << std::endl;
 
-    of << "section \"map metadata " << out <<  "\", rom0" << std::endl;
+    of << "section \"map metadata and objects " << out <<  "\", rom0" << std::endl;
     of << inlabel << "::" << std::endl;
     of << "    db " << width << ", " << height << std::endl;
-    of << "    db BANK(" << inlabel << "_data), LOW(" << inlabel << "_data), HIGH(" << inlabel << "_data)";
-    of << std::endl << std::endl;
+    of << "    db BANK(" << inlabel << "_data), LOW(" << inlabel << "_data), HIGH(" << inlabel << "_data)" << std::endl;
+
+    of << "    db ";
+    for (std::size_t ty : presentTypes)
+        of << ty << ", ";
+    of << '0' << std::endl;
+
+    for (const auto& obj : actors)
+    {
+        of << "    db " << obj.type;
+        for (auto b : obj.bytes)
+            of << ", " << (int)b;
+        of << std::endl;
+    }
+    of << "    db 0" << std::endl << std::endl;
 
     of << "section \"map data " << out << "\", romx" << std::endl;
     of << inlabel << "_data:";
@@ -228,4 +258,57 @@ int getMapData(const nlohmann::json& j, std::vector<int>& data, int& width, int&
 
     std::cout << "Error parsing map: failed to find map data!" << std::endl;
     return -1;
+}
+
+int getActorData(const nlohmann::json& j, std::vector<Actor>& data, std::string actorFile)
+{
+    auto actorTypes = parseActorTypes(actorFile);
+
+    if (!get(j, "layers").is_array())
+    {
+        std::cout << "Error parsing map: failed to find layers property!" << std::endl;
+        return -1;
+    }
+
+    for (const auto& ly : get(j, "layers"))
+    {
+        if (get(ly, "name") != "actors") continue;
+
+        auto objs = get(ly, "objects");
+        if (!objs.is_array()) continue;
+
+        for (const auto& obj : objs)
+        {
+            auto type = get(obj, "type");
+            if (!type.is_string()) continue;
+            auto tname = type.get<std::string>();
+
+            auto it = actorTypes.find(tname);
+            if (it == actorTypes.end()) continue;
+
+            Actor actor;
+            actor.type = it->second.type;
+            actor.bytes.resize(it->second.paramSize);
+
+            for (const auto& p : it->second.parameters)
+            {
+                std::intmax_t param = 0;
+                std::uint8_t* ppar = (std::uint8_t*)&param;
+
+                if (p.first == "x" || p.first == "y")
+                {
+                    auto prop = get(obj, p.first);
+                    if (!prop.is_number_integer()) goto secondContinue;
+                    param = prop.get<std::intmax_t>();
+                    std::copy(ppar, ppar+p.second.size, actor.bytes.begin() + p.second.ofs);
+                }
+            }
+
+            data.push_back(std::move(actor));
+
+        secondContinue:;
+        }
+    }
+
+    return 0;
 }

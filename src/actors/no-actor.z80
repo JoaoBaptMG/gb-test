@@ -1,0 +1,15 @@
+;
+; actors/no-actor.z80
+; Contains the functions for invalid IDs and no actors
+;
+
+include "gameboy.inc"
+
+section "bank 0 actors/no-actor.z80", rom0
+NoActor_GraphicsTable::
+    db
+
+section "bank x actors/no-actor.z80", romx
+NoActor_Init::
+NoActor_Update::
+    ret

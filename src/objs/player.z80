@@ -22,16 +22,20 @@ wPlayerSpdX: ds 2
 wPlayerSpdY: ds 2
 ; player's animation frame
 wPlayerAnimStep: db
+; player's state flags
+wPlayerFlags: db
+
+section "hram player.z80", hram
 ; camera offset X as a 16-bit integer
-wCameraOffsetX:: dw
+hCameraOffsetX:: dw
 ; camera offset Y as a 16-bit integer
-wCameraOffsetY:: dw
+hCameraOffsetY:: dw
 
 section "bank 0 player.z80", rom0
 ; Load's the player's character on screen
 PlayerLoadData::
     ; Copy the character's graphics
-    ld hl, vSpriteData
+    ld hl, vPlayerSlot
     ld de, data_sprites_player_png
     ld bc, data_sprites_player_png_end - data_sprites_player_png
     jp MemoryCopy
@@ -44,6 +48,7 @@ PlayerInit::
     ; Zero the speed data
     ld hl, wPlayerSpdX
     xor a
+    ld [hl+], a
     ld [hl+], a
     ld [hl+], a
     ld [hl+], a
@@ -85,16 +90,12 @@ PlayerUpdate::
     bit PADB_A, a
     jr z, .checkForJumpDecay
 
-    ; If the speed is zero, jump
-    ld hl, wPlayerSpdY
-    ld a, [hl+]
-    and a
-    jr nz, .checkForJumpDecay
-    ld a, [hl]
-    and a
+    ; If the player is not in the air, jump
+    ld a, [wPlayerFlags]
+    bit 0, a
     jr nz, .checkForJumpDecay
 
-    dec hl
+    ld hl, wPlayerSpdY
     ld a, 224
     ld [hl+], a
     ld a, -4
@@ -120,13 +121,17 @@ PlayerUpdate::
     cp a, 112
     jr nc, .applyGravity
 
-.decaySpeed
+.decaySpeed:
     ld a, 112                   ; Set the decay speed
     ld [hl+], a
     ld a, -2
     ld [hl], a
 
 .applyGravity:
+    ; Set the in-air flag
+    ld hl, wPlayerFlags
+    set 0, [hl]
+
     ; Add the gravity to the speed
     ld hl, wPlayerSpdY
     ld a, [hl]
@@ -207,6 +212,10 @@ PlayerUpdate::
     ld hl, wPlayerSpdY
     ld [hl+], a
     ld [hl+], a
+
+    ; Reset the in-air flag
+    ld hl, wPlayerFlags
+    res 0, [hl]
 
     ; Clamp the player to a tile boundary
     ld hl, wPlayerY
@@ -301,7 +310,7 @@ PlayerUpdate::
 
     ; Clamp camera offset to 0
     xor a
-    ld hl, wCameraOffsetX
+    ld hl, hCameraOffsetX
     ld [hl+], a
     ld [hl], a
     jr .checkY
@@ -323,7 +332,7 @@ PlayerUpdate::
     ; Clamp camera offset to (max position - 72)
     ld a, [hl]
     sub a, 72
-    ld hl, wCameraOffsetX
+    ld hl, hCameraOffsetX
     ld [hl+], a
     jr nc, .noOverflow3
     dec d
@@ -335,7 +344,7 @@ PlayerUpdate::
     ; Set camera offset to (player X - 72)
     ld a, c
     sub a, 72
-    ld hl, wCameraOffsetX
+    ld hl, hCameraOffsetX
     ld [hl+], a
     jr nc, .noOverflow0
     dec b
@@ -359,7 +368,7 @@ PlayerUpdate::
 
     ; Clamp camera offset to 0
     xor a
-    ld hl, wCameraOffsetY
+    ld hl, hCameraOffsetY
     ld [hl+], a
     ld [hl], a
     jr .addSprite
@@ -382,7 +391,7 @@ PlayerUpdate::
     ld b, a
     ld a, [hl]
     sub a, 48
-    ld hl, wCameraOffsetY
+    ld hl, hCameraOffsetY
     ld [hl+], a
     jr nc, .noOverflow4
     dec d
@@ -392,7 +401,7 @@ PlayerUpdate::
 
 .setYNormal:
     ; Set camera offset to (player Y - 48)
-    ld hl, wCameraOffsetY
+    ld hl, hCameraOffsetY
     ld a, c
     sub a, 48
     ld [hl+], a
@@ -402,18 +411,20 @@ PlayerUpdate::
     ld [hl], b
 
 .addSprite:
-    ; Add Two OAM entries to the shadow OAM
-    ld hl, wShadowOAM
+    ; Add four OAM entries to the shadow OAM
+    ld h, HIGH(wShadowOAM)
+    ldh a, [hOAMPointer]
+    ld l, a
 
     ; First entry
-    ld a, [wCameraOffsetY]
+    ldh a, [hCameraOffsetY]
     ld d, a
     ld a, [wPlayerY+1]
     sub a, d
     add a, 16
     ld b, a
     ld [hl+], a
-    ld a, [wCameraOffsetX]
+    ldh a, [hCameraOffsetX]
     ld d, a
     ld a, [wPlayerX+1]
     sub a, d
@@ -457,4 +468,9 @@ PlayerUpdate::
     ld [hl+], a
     xor a
     ld [hl+], a
+
+    ; Stash back the OAM pointer
+    ld a, l
+    ldh [hOAMPointer], a
+
     ret

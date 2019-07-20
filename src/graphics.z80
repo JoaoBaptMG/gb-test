@@ -10,3 +10,12 @@ include "graphics.inc"
 section "wram-oamshadow graphics.z80", wram0, align[8]
 wShadowOAM:: ds 160
 
+; The OAM pointer
+section "hram graphics.z80", hram
+hOAMPointer:: db
+
+section "vram graphics.z80", vram
+vPlayerSlot:: ds 128
+
+; Remember to put this last
+vActorTypeSlots:: 

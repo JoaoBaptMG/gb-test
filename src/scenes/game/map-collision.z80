@@ -9,14 +9,20 @@ section "bank 0 scenes/game/map-collision.z80", rom0
 
 ; Check an intersection with a horizontal line
 ; input:
+;    a: the bank from which this code is being called
 ;    hl: a pointer to a structure containing
 ;       - 16.8 X and Y positions (already added to speed)
 ;    bc: the width of the line in 8.8 fixed point format (- $0.01)
 ;    de: a value to add to the Y position before getting the tile index
 ; output:
-;    hl, bc, de will be scrapped
+;    bc, de will be scrapped
+;    hl will be preserved
 ;    the result of the collision will be stored in the carry bit
 CheckHorizontalLineCollision::
+    ; Store away the bank
+    ldh [hPreviousBank], a
+    ; Push HL
+    push hl
     ; Add the position to the width for the second position
     ld a, [hl+]
     add a, c        ; We don't need the subpixel calculation here, we just want the carry
@@ -89,24 +95,39 @@ CheckHorizontalLineCollision::
     ld a, [de]
     ; If the flag has 'solid', return with carry set
     rra
-    ret c ; Return with carry set if collision happened
+    ; Return with carry set if collision happened
+    jr c, .endRoutine
+
+.currentlyNoCollision:
     ; If not, continue loop, noting that carry is reset
     dec b
     jr nz, .loop
 
     ; No collision, return with carry reset
+.endRoutine:
+    ; Pop HL
+    pop hl
+    ; Restore the bank number
+    ldh a, [hPreviousBank]
+    ld [rROMB0], a
     ret
 
 ; Check an intersection with a horizontal line
 ; input:
+;    a: the bank from which this code is being called
 ;    hl: a pointer to a structure containing
 ;       - 16.8 X and Y positions (already added to speed)
 ;    de: the height of the line in 8.8 fixed point format (- $0.01)
 ;    bc: a value to add to the X position before getting the tile index
 ; output:
-;    hl, bc, de will be scrapped
+;    hl will be preserved
+;    bc, de will be scrapped
 ;    the result of the collision will be stored in the carry bit
 CheckVerticalLineCollision::
+    ; Store away the bank
+    ldh [hPreviousBank], a
+    ; Push HL
+    push hl
     ; Add the position to the width for the second position
     ld a, [hl+]
     add a, c        ; We don't need the subpixel calculation here, we just want the carry
@@ -180,10 +201,11 @@ CheckVerticalLineCollision::
     ld a, [de]
     ; If the flag has 'solid', return with carry set
     rra
-    ret c ; Return with carry set if collision happened
+    ; Return with carry set if collision happened
+    jr c, .endRoutine
     ; If not, continue loop, noting that carry is reset
     dec b
-    ret z
+    jr z, .endRoutine
 
     ; Add the map width
     ld a, [wMapWidth]
@@ -192,3 +214,14 @@ CheckVerticalLineCollision::
     jr nc, .loop
     inc h
     jr .loop
+
+.endRoutine:
+    ; Restore HL
+    pop hl
+    ; Restore the bank number
+    ldh a, [hPreviousBank]
+    ld [rROMB0], a
+    ret
+
+section "hram map-collision.z80", hram
+hPreviousBank: db
