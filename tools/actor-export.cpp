@@ -17,16 +17,29 @@ std::map<std::string,ActorType> parseActorTypes(std::string file)
 
     for (const auto& item : j.items())
     {
-        ActorType actor;
-        actor.paramSize = 0;
+        if (!item.value().is_array()) continue;
 
-        for (const auto& param : item.value().items())
+        ActorType actor;
+
+        for (const auto& param : item.value())
         {
-            auto arr = param.value().get<std::vector<std::size_t>>();
-            actor.parameters.emplace(param.key(), Parameter{ arr[0], arr[1] });
-            auto maxParamSize = arr[0] + arr[1];
-            if (actor.paramSize < maxParamSize)
-                actor.paramSize = maxParamSize;
+            Parameter parameter;
+
+            parameter.offset = param.at("offset").get<std::size_t>();
+            parameter.size = param.at("size").get<std::size_t>();
+
+            if (param.contains("param"))
+            {
+                parameter.parameter = param.at("param").get<std::string>();
+                if (param.contains("mult"))
+                    parameter.valueOrMult = param.at("mult").get<std::intmax_t>();
+                else parameter.valueOrMult = 1;
+            }
+            else if (param.contains("value"))
+                parameter.valueOrMult = param.at("value").get<std::intmax_t>();
+            else parameter.valueOrMult = 0;
+
+            actor.parameters.push_back(std::move(parameter));
         }
 
         actorTypes.emplace(item.key(), std::move(actor));
@@ -72,7 +85,7 @@ int actorExport(int argc, char **argv)
     of << "section \"rom " << out << "\", rom0, align[8]" << std::endl;
     of << "ActorTypeTable::";
 
-    for (int i = 0; i < 5; i++)
+    for (int i = 0; i < 3; i++)
     {
         int k = 0;
         for (const auto& ac : actorTypes)
@@ -86,8 +99,6 @@ int actorExport(int argc, char **argv)
                 case 0: of << "BANK(" << ac << "_Update)"; break;
                 case 1: of << "LOW(" << ac << "_Update)"; break;
                 case 2: of << "HIGH(" << ac << "_Update)"; break;
-                case 3: of << "LOW(" << ac << "_Init)"; break;
-                case 4: of << "HIGH(" << ac << "_Init)"; break;
             }
         }
 

@@ -9,7 +9,7 @@ std::string pickTilesetName(const nlohmann::json& j);
 
 struct RemappingInterval { int from, to, size; };
 
-struct Actor { int type; std::vector<std::uint8_t> bytes; };
+struct Actor { int type; std::array<std::uint8_t, 16> bytes; };
 
 int addBlankRemappingInterval(const nlohmann::json& j, std::vector<RemappingInterval> &remappingInterval, int& curValue);
 int addAutotileRemappingIntervals(const nlohmann::json& j, const std::string& at,
@@ -102,9 +102,9 @@ int mapExport(int argc, char **argv)
     std::vector<Actor> actors;
     std::set<std::size_t> presentTypes;
     if ((r = getActorData(j, actors, argv[4]))) return r;
-    if (actors.size() > 32)
+    if (actors.size() > 64)
     {
-        std::cout << "Error parsing map " << in << ": there can only be a maximum of 32 objects!" << std::endl;
+        std::cout << "Error parsing map " << in << ": there can only be a maximum of 64 actors!" << std::endl;
         return -1;
     }
 
@@ -124,17 +124,23 @@ int mapExport(int argc, char **argv)
     of << "    db ";
     for (std::size_t ty : presentTypes)
         of << ty << ", ";
-    of << '0' << std::endl;
+    of << "0, " << actors.size();
 
-    for (const auto& obj : actors)
+    for (std::size_t i = 0; i < actors.size(); i++)
     {
-        of << "    db " << obj.type;
-        for (auto b : obj.bytes)
-            of << ", " << (int)b;
-        of << std::endl;
+        if (i % 16 == 0) of << std::endl << "    db ";
+        else of << ", ";
+        of << actors[i].type;
     }
-    of << "    db 0" << std::endl << std::endl;
 
+    for (const auto& actor : actors)
+    {
+        of << std::endl << "    db " << (std::size_t)actor.bytes[0];
+        for (std::size_t i = 1; i < actor.bytes.size(); i++)
+            of << ", " << (std::size_t)actor.bytes[i];
+    }
+
+    of << std::endl << std::endl;
     of << "section \"map data " << out << "\", romx" << std::endl;
     of << inlabel << "_data:";
     for (std::size_t i = 0; i < data.size(); i++)
@@ -286,22 +292,25 @@ int getActorData(const nlohmann::json& j, std::vector<Actor>& data, std::string 
             auto it = actorTypes.find(tname);
             if (it == actorTypes.end()) continue;
 
-            Actor actor;
+            Actor actor{};
             actor.type = it->second.type;
-            actor.bytes.resize(it->second.paramSize);
 
             for (const auto& p : it->second.parameters)
             {
                 std::intmax_t param = 0;
                 std::uint8_t* ppar = (std::uint8_t*)&param;
 
-                if (p.first == "x" || p.first == "y")
+                if (p.parameter.empty()) param = p.valueOrMult;
+                else if (p.parameter == "x" || p.parameter == "y")
                 {
-                    auto prop = get(obj, p.first);
-                    if (!prop.is_number_integer()) goto secondContinue;
-                    param = prop.get<std::intmax_t>();
-                    std::copy(ppar, ppar+p.second.size, actor.bytes.begin() + p.second.ofs);
+                    auto prop = get(obj, p.parameter);
+                    if (!prop.is_number()) goto secondContinue;
+                    double val = prop.get<double>();
+                    param = std::intmax_t(val * p.valueOrMult);
                 }
+
+                std::size_t size = std::min(p.size, actor.bytes.size() - p.offset);
+                std::copy(ppar, ppar + size, actor.bytes.begin() + p.offset);
             }
 
             data.push_back(std::move(actor));

@@ -27,44 +27,6 @@ Bumper_GraphicsTable::
 
 section "bank x actors/bumper.z80", romx
 
-; Calling convention for the init routine
-; - bc: the initialization struct
-; - hl: the allocated region for the actor
-; the init routine should point bc right after the initialization struct
-Bumper_Init::
-    ; Put the required parameters in their positions
-    xor a           ; Zero (subpixel X)
-    ld [hl+], a
-
-    ld a, [bc]
-    ld [hl+], a     ; Low X
-    inc bc
-
-    ld a, [bc]
-    ld [hl+], a     ; High X
-    inc bc
-
-    xor a           ; Zero (subpixel Y)
-    ld [hl+], a
-
-    ld a, [bc]
-    ld [hl+], a     ; Low Y
-    inc bc
-
-    ld a, [bc]
-    ld [hl+], a     ; High Y
-    inc bc
-
-    xor a           
-    ld [hl+], a     ; Low speed X
-    dec a
-    ld [hl+], a     ; High speed X
-    inc a
-    ld [hl+], a     ; Low speed Y
-    inc a
-    ld [hl+], a     ; High speed Y
-    ret
-
 ; Calling convention for the update function:
 ;   hl - address of allocated region for that actor
 Bumper_Update::

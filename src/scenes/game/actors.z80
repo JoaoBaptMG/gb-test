@@ -10,19 +10,16 @@ section "bank 0 scenes/game/actors.z80", rom0
 ; Initializes the actor list
 ActorsInit::
     xor a
-    ld bc, 32
+    ld bc, 64
     ld hl, wActorTypes
     jp MemoryFill
 
 ; Attempts to allocate space for a new actor
 ; input
 ;    - e: the type of the actor
-;    - bc: the initialization structure for it
 ; output
 ;    - a will return nonzero if a slot is not found, and zero if it is found
-;    - de, hl will be scrapped
-;    - bc will obey whatever convention the initialization routine does,
-;      but it should point *after* the initialization structure
+;    - hl will be scrapped
 ;
 ActorNew::
     ; First, try to find an empty slot
@@ -31,7 +28,7 @@ ActorNew::
     ld a, [hl+]         ; Check if that slot is empty
     and a               ; If it is, continue
     jr z, .foundSlot
-    bit 5, l            ; If all slots were full, return early
+    bit 6, l            ; If all slots were full, return early
     ret nz
     jr .findLoop
 .foundSlot:
@@ -40,118 +37,94 @@ ActorNew::
     dec l
     ld h, HIGH(wActorTypes)
     ld [hl], e                  ; Store the actor type
-    ld h, 0
-    add hl, hl          ; The slot of the address * 32
-    add hl, hl
-    add hl, hl
-    add hl, hl
-    add hl, hl
-    ld a, HIGH(wActorBaseMemory)
-    add a, h
-    ld h, a             ; Now hl = wActorBaseMemory + slot * 32
-
-    ; Load the subroutine table
-    ld d, HIGH(ActorTypeTable)
-    ld a, [de]          ; The subroutine's bank
-    ld [rROMB0], a
-    inc d
-    inc d
-    inc d               ; Go to the init routine's address
-    ; Lack of registers, unfortunately
-    push hl
-    ld a, [de]          ; The init routine's low byte
-    ld l, a
-    inc d
-    ld a, [de]          ; The init routine's high byte
-    ld d, a             ; Load the init routine's address
-    ld e, l
-    pop hl
-    ; Calling convention for the init routine
-    ; - bc: the initialization struct
-    ; - hl: the allocated region for the actor
-    ; the init routine should point bc right after the initialization struct
-    call DynamicDE
-    xor a
     ret
 
 ; Load actors from map
 ; input
-;   bc: pointing to the first actor data, loaded as
-;       (type) then initialization data specific for that object
+;   de: pointing to the number of objects in the game
 ActorsLoadFromMap::
-    ld a, [bc]          ; Get the type from the actor
+    ld a, [de]          ; Get the number of objects
     and a               ; If it's zero, return
     ret z
-    inc bc              ; Make bc point properly to the structure
-    ld e, a             ; Transfer the type to the correct register
-    call ActorNew
-    and a               ; If there aren't available slots anymore, bail out
-    ret nz              ; Lack of slots is represented as a != 0
-    jr ActorsLoadFromMap
+    inc de              ; Make de point to the first object
+    ld b, 0
+    ld c, a             ; Transfer the size to the correct register
+    push bc             ; Push the count
+    ld hl, wActorTypes  ; The first transfer is to the actor types table
+    call MemoryCopy     ; The first memory copy
+    pop bc              ; Restore the count
+    swap c              ; Multiply by 16, swapping c
+    ld a, c             ; a = (u4) low, (l4) high
+    and $0f             ; a = (u4) 0, (l4) high
+    ld b, a             ; transfer to b
+    xor a, c            ; a = (u4) low, (l4) 0
+    ld c, a             ; transfer to c
+    ld hl, wActorBaseMemory ; now transfer the initial bytes
+    jp MemoryCopy           ; finish by transferring all that
 
 ; Load graphics for types declared in map
 ; input
 ;   hl: pointing to the first declared type
 ; output
-;   bc: pointing to the end of the declared types
+;   de: pointing to the end of the declared types
 ActorsLoadGraphicsTypes::
-    ld b, h
-    ld c, l
+    ld d, h
+    ld e, l
     ld hl, vActorTypeSlots
 .actorLoadGraphicsLoop:
-    ld a, [bc]          ; Get the declared type
-    inc bc
+    ld a, [de]          ; Get the declared type
+    inc de
     and a               ; Zero marks the end of the type list
     ret z
-    ld d, HIGH(wTypeGraphics)   ; Assign the found ID to the correct pointer
-    ld e, a
+    ld b, HIGH(wTypeGraphics)   ; Assign the found ID to the correct pointer
+    ld c, a
 
     ld a, l             ; Obtain the character ID (which is the address / 16)
     xor a, h            ; a = (l ^ h)
     and $0f             ; upper: 0, lower: l ^ h 
     xor a, h            ; upper: h, lower, l
     swap a              ; correctly calculated tile ID
-    ld [de], a          ; store it to the pointer value
+    ld [bc], a          ; store it to the pointer value
 
     push hl             ; Push the VRAM address
     ; Get the graphics address (must be bank 0)
     ld h, HIGH(ActorTypeGraphicsTable) >> 1
-    ld l, e             ; Load the type to the right place
+    ld l, c             ; Load the type to the right place
     add hl, hl          ; times 2
 
     ; Load the address
     ld a, [hl+]
-    ld d, [hl]
-    ld e, a
+    ld b, [hl]
+    ld c, a
     pop hl
 
-    push bc             ; Push the structure pointer
+    push de             ; Push the structure pointer
 .eachTypeLoadGraphicsLoop:
     ; Load the size
-    ld a, [de]          ; Check the size
+    ld a, [bc]          ; Check the size
     and a               ; If it's zero, bail out
     jr z, .eachTypeLoadGraphicsLoopEnd
 
-    ld c, a             ; Load in the right register
-    inc de
-    ld a, [de]          ; Load the bank
+    ld d, a             ; Load in the right register
+    inc bc
+    ld a, [bc]          ; Load the bank
     ld [rROMB0], a
-    inc de
-    ld a, [de]          ; Low address
-    ld b, a
-    inc de
-    ld a, [de]          ; High address
-    push de             ; Push the graphics table pointer
-    ld e, b             ; Put the address in the right place
+    inc bc
+    ld a, [bc]          ; Low address
+    ld e, a
+    inc bc
+    ld a, [bc]          ; High address
+    push bc             ; Push the graphics table pointer
+    ld c, d             ; Put the address in the right place
     ld d, a
     ld b, 0             ; Re-stash 0
     call MemoryCopy     ; Copy to the VRAM - hl will finish pointing to the next address
-    pop de              ; Pop the graphics table pointer
-    inc de
+    pop bc              ; Pop the graphics table pointer
+    inc bc
     jr .eachTypeLoadGraphicsLoop
 
 .eachTypeLoadGraphicsLoopEnd:
-    pop bc              ; Restore the structure pointer
+    pop de              ; Restore the structure pointer
     jr .actorLoadGraphicsLoop
 
 ; Update all the actors according to the list
@@ -186,17 +159,17 @@ ActorsUpdate::
 
 .skipActor:
     ld a, l         ; Increase the actor's data pointer
-    add a, 32
+    add a, 16
     ld l, a
     jr nc, .noOverflow18
     inc h
 .noOverflow18:
     inc c           ; Check if we ended all the actors
-    bit 5, c
+    bit 6, c
     jr z, .actorLoop
     ret
 
 section "wram scenes/game/actors.z80", wram0, align[8]
 ; The actor types and the region allocated to them
-wActorBaseMemory: ds 32*32
-wActorTypes: ds 32
+wActorBaseMemory: ds 16*64
+wActorTypes: ds 64

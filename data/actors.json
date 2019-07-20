@@ -1,3 +1,9 @@
 {
-    "Bumper": { "x": [0, 2], "y": [2, 2] }
+    "Bumper":
+    [
+        { "offset": 0, "size": 3, "param": "x", "mult": 256 },
+        { "offset": 3, "size": 3, "param": "y", "mult": 256 },
+        { "offset": 6, "size": 2, "value": -256 },
+        { "offset": 8, "size": 2, "value": 256 }
+    ]
 }
